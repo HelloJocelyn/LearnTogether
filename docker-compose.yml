@@ -4,6 +4,7 @@ services:
       context: ./backend
     environment:
       - DATABASE_URL=sqlite:////data/app.db
+      - CHECKIN_TZ=Asia/Tokyo
     volumes:
       - backend_data:/data
     ports:

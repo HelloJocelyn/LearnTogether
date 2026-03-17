@@ -25,9 +25,9 @@ The frontend proxies `/api` to the backend via Nginx, so the UI calls the backen
 
 ## Check-in time window (real check-ins)
 
-Backend marks a check-in as **real** only if it happens between **04:30–06:00** (inclusive) in the server timezone.
+Backend marks a check-in as **real** only if it happens between **04:30–06:00** (inclusive) in the configured timezone.
 
-- **Default timezone**: server local timezone
+- **This project default**: `Asia/Tokyo` (set in `docker-compose.yml`)
 - **Override timezone**: set `CHECKIN_TZ` (IANA name), e.g. `Asia/Tokyo`, `America/Los_Angeles`
 
 Example:
