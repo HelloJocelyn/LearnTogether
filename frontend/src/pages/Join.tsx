@@ -5,7 +5,7 @@ import { createCheckin } from '../api'
 
 const zoomUrl =
   (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
-  'https://rakuten.zoom.us/j/6431578576?pwd=dWU4bWxQdWdDQTfYVGRCdIF3TDMrUT09'
+  'https://zoom.us/join'
 
 export default function Join() {
   const [nickname, setNickname] = useState('')
