@@ -1,0 +1,158 @@
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 16px 56px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.status span[data-status='ok'] {
+  color: #16a34a;
+}
+
+.status span[data-status='error'] {
+  color: #dc2626;
+}
+
+.main {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+input {
+  flex: 1 1 320px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.08);
+  color: inherit;
+}
+
+button {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--accent-border);
+  background: linear-gradient(135deg, var(--accent-bg), rgba(20, 184, 166, 0.12));
+  color: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  box-shadow: var(--shadow);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.list {
+  margin: 10px 0 0;
+}
+
+.muted {
+  opacity: 0.75;
+}
+
+.error {
+  margin-top: 10px;
+  color: #fca5a5;
+}
+
+.qrWrap {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+}
+
+.history {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.day {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  overflow: clip;
+}
+
+.daySummary {
+  cursor: pointer;
+  padding: 12px 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  user-select: none;
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.dayTitle {
+  font-weight: 650;
+}
+
+.dayList {
+  background: var(--surface-2);
+  padding: 0 12px 12px;
+  margin: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+
+.rowItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: white;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  flex: 0 0 auto;
+}
+
+.rowText {
+  display: grid;
+  gap: 2px;
+}
+
