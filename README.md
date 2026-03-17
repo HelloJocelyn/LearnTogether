@@ -23,6 +23,19 @@ The frontend proxies `/api` to the backend via Nginx, so the UI calls the backen
 - Home page shows a QR code that points to `/join`
 - `/join` asks for a nickname, saves it via `POST /api/checkins`, then redirects to Zoom
 
+## Check-in time window (real check-ins)
+
+Backend marks a check-in as **real** only if it happens between **04:30–06:00** (inclusive) in the server timezone.
+
+- **Default timezone**: server local timezone
+- **Override timezone**: set `CHECKIN_TZ` (IANA name), e.g. `Asia/Tokyo`, `America/Los_Angeles`
+
+Example:
+
+```bash
+export CHECKIN_TZ=Asia/Tokyo
+```
+
 Configure the Zoom meeting URL for the frontend:
 
 ```bash

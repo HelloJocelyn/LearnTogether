@@ -23,4 +23,5 @@ class CheckInOut(BaseModel):
   id: int
   created_at: datetime
   nickname: str
+  is_real: bool
 

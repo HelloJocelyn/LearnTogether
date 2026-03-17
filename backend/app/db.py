@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -36,4 +36,13 @@ def init_db() -> None:
   from . import models  # noqa: F401
 
   Base.metadata.create_all(bind=engine)
+
+  # Minimal migration for early-stage dev: add new columns if needed.
+  if DATABASE_URL.startswith("sqlite"):
+    insp = inspect(engine)
+    if "checkins" in insp.get_table_names():
+      cols = {c["name"] for c in insp.get_columns("checkins")}
+      if "is_real" not in cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE checkins ADD COLUMN is_real BOOLEAN NOT NULL DEFAULT 0"))
 

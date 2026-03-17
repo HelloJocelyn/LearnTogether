@@ -1,3 +1,5 @@
+import os
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -39,8 +41,8 @@ def create_item(payload: schemas.ItemCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/checkins", response_model=list[schemas.CheckInOut])
-def list_checkins(limit: int = 50, db: Session = Depends(get_db)):
-  return crud.list_checkins(db, limit=limit)
+def list_checkins(limit: int = 50, real_only: bool = False, db: Session = Depends(get_db)):
+  return crud.list_checkins(db, limit=limit, real_only=real_only)
 
 
 @app.post("/api/checkins", response_model=schemas.CheckInOut)
@@ -51,5 +53,6 @@ def create_checkin(payload: schemas.CheckInCreate, db: Session = Depends(get_db)
     from fastapi import HTTPException
 
     raise HTTPException(status_code=400, detail="nickname is required")
-  return crud.create_checkin(db, nickname=nickname)
+  tz_name = os.getenv("CHECKIN_TZ")
+  return crud.create_checkin(db, nickname=nickname, tz_name=tz_name)
 
