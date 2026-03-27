@@ -259,6 +259,26 @@ button.secondary {
   opacity: 1;
 }
 
+.pill.outsidePill {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(148, 163, 184, 0.12);
+  opacity: 0.95;
+}
+
+.outsideLogSummary {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.outsideLogFloating {
+  position: static;
+}
+
+.outsideLogBody {
+  max-height: 45vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .notice {
   margin-top: 12px;
   padding: 12px;
@@ -272,5 +292,304 @@ button.secondary {
   font-weight: 700;
   margin-bottom: 6px;
   color: var(--text-h);
+}
+
+.analytics {
+  text-align: left;
+}
+
+.analyticsTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.analyticsControls {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tabs button {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+  border-radius: 999px;
+}
+
+.tabs button.tabActive {
+  border-color: var(--accent-border);
+  background: rgba(56, 189, 248, 0.16);
+}
+
+.filters {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: end;
+}
+
+.label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  opacity: 0.95;
+}
+
+.label select {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.05);
+  color: inherit;
+}
+
+.dailyGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.dailyCell {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dailyDate {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.dailyCount {
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dailyCount .dailySmall {
+  font-weight: 500;
+  opacity: 0.8;
+  font-size: 12px;
+}
+
+.dailyCount.real {
+  color: rgba(34, 197, 94, 0.95);
+}
+
+.dailyCount.outside {
+  color: rgba(148, 163, 184, 1);
+}
+
+.yearGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.yearTile {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.yearMonth {
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+
+.yearCounts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.realDot {
+  background: rgba(34, 197, 94, 0.95);
+}
+
+.outsideDot {
+  background: rgba(148, 163, 184, 1);
+}
+
+.sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(148, 163, 184, 0.35);
+}
+
+.matrixWrap {
+  margin-top: 10px;
+}
+
+.matrixLegend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legendChip {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid var(--border);
+}
+
+.realChip {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.outsideChip {
+  background: rgba(148, 163, 184, 0.2);
+}
+
+.emptyChip {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.matrixScroll {
+  overflow: auto;
+  padding-bottom: 10px;
+}
+
+.matrix {
+  display: grid;
+  gap: 10px;
+  min-width: 860px;
+}
+
+.matrixHeaderRow,
+.matrixUserRow {
+  display: grid;
+  gap: 6px;
+  align-items: center;
+}
+
+.matrixHeaderRow {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.25);
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-radius: 12px;
+}
+
+.matrixUserHeader {
+  padding-left: 6px;
+  font-weight: 800;
+  opacity: 0.95;
+}
+
+.matrixDayHeader {
+  text-align: center;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.matrixUserCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 6px;
+}
+
+.avatarMini {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.userName {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cell {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.cellInner {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.cell.empty {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.cell.empty .cellInner {
+  background: rgba(148, 163, 184, 0.0);
+}
+
+.cell.real .cellInner {
+  opacity: 1;
+}
+
+.cell.outside {
+  border-style: dashed;
+  border-color: rgba(148, 163, 184, 0.6);
+}
+
+.cell.outside .cellInner {
+  opacity: 0.45;
+  filter: grayscale(0.3);
+}
+
+@media (max-width: 1024px) {
+  .dailyGrid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+  .yearGrid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+  .matrix {
+    min-width: 760px;
+  }
 }
 

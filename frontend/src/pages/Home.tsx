@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
 
 import { createCheckin, listCheckins, type CheckIn } from '../api'
+import CheckinAnalytics from '../components/CheckinAnalytics'
 
 const zoomUrl =
   (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
@@ -107,6 +108,15 @@ export default function Home() {
       }))
   }, [checkins])
 
+  const outsideGrouped = useMemo(() => {
+    return grouped
+      .map(({ dateKey, items }) => ({
+        dateKey,
+        items: items.filter((x) => !x.is_real),
+      }))
+      .filter(({ items }) => items.length > 0)
+  }, [grouped])
+
   return (
     <div className="page">
       <header className="header">
@@ -182,80 +192,97 @@ export default function Home() {
             <p className="muted">No check-ins yet.</p>
           ) : (
             <div className="history">
-              {grouped.map(({ dateKey, items }) => (
-                <details key={dateKey} className="day" open={false}>
-                  <summary className="daySummary">
-                    <span className="dayTitle">{dateKey}</span>
-                    <span className="dayCount muted">
-                      {items.length} {items.length === 1 ? 'check-in' : 'check-ins'}
-                    </span>
-                  </summary>
+              {grouped.map(({ dateKey, items }) => {
+                const real = items.filter((x) => x.is_real)
+                return (
+                  <details key={dateKey} className="day" open={false}>
+                    <summary className="daySummary">
+                      <span className="dayTitle">{dateKey}</span>
+                      <span className="dayCount muted">
+                        {real.length} {real.length === 1 ? 'real check-in' : 'real check-ins'}
+                      </span>
+                    </summary>
 
-                  {(() => {
-                    const real = items.filter((x) => x.is_real)
-                    const outside = items.filter((x) => !x.is_real)
-
-                    const renderList = (list: CheckIn[], variant: 'real' | 'outside') => (
-                      <ul className={`list dayList ${variant === 'outside' ? 'outside' : ''}`}>
-                        {list.length === 0 ? (
-                          <li className="muted emptyRow">No one yet.</li>
-                        ) : (
-                          list.map((c) => {
-                            const av = avatarFor(c.nickname)
-                            return (
-                              <li
-                                key={c.id}
-                                className={`rowItem ${variant === 'outside' ? 'outsideRow' : ''}`}
+                    <ul className="list dayList">
+                      {real.length === 0 ? (
+                        <li className="muted emptyRow">No real check-ins.</li>
+                      ) : (
+                        real.map((c) => {
+                          const av = avatarFor(c.nickname)
+                          return (
+                            <li key={c.id} className="rowItem">
+                              <span
+                                className="avatar"
+                                style={{ background: av.bg }}
+                                aria-hidden="true"
                               >
-                                <span
-                                  className={`avatar ${variant === 'outside' ? 'avatarGrey' : ''}`}
-                                  style={
-                                    variant === 'outside' ? undefined : { background: av.bg }
-                                  }
-                                  aria-hidden="true"
-                                >
-                                  {av.initials}
-                                </span>
-                                <div className="rowText">
-                                  <div className="rowTop">
-                                    <strong>{c.nickname}</strong>
-                                    <span className={c.is_real ? 'pill real' : 'pill'}>
-                                      {c.is_real ? 'Real' : 'Outside 4:30–6:00'}
-                                    </span>
-                                  </div>
-                                  <div className="muted">{formatDateTime(c.created_at)}</div>
+                                {av.initials}
+                              </span>
+                              <div className="rowText">
+                                <div className="rowTop">
+                                  <strong>{c.nickname}</strong>
+                                  <span className="pill real">Real</span>
                                 </div>
-                              </li>
-                            )
-                          })
-                        )}
-                      </ul>
-                    )
-
-                    return (
-                      <div className="dayGrid">
-                        <div className="col">
-                          <div className="colHeader">
-                            <span className="colTitle">Real check-ins</span>
-                            <span className="muted">{real.length}</span>
-                          </div>
-                          {renderList(real, 'real')}
-                        </div>
-                        <div className="col">
-                          <div className="colHeader">
-                            <span className="colTitle">Outside window</span>
-                            <span className="muted">{outside.length}</span>
-                          </div>
-                          {renderList(outside, 'outside')}
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </details>
-              ))}
+                                <div className="muted">{formatDateTime(c.created_at)}</div>
+                              </div>
+                            </li>
+                          )
+                        })
+                      )}
+                    </ul>
+                  </details>
+                )
+              })}
             </div>
           )}
         </section>
+
+        <section className="card">
+          <CheckinAnalytics />
+        </section>
+
+        {outsideGrouped.length > 0 ? (
+          <details className="card" open={false}>
+            <summary className="daySummary outsideLogSummary" style={{ cursor: 'pointer' }}>
+              <span className="dayTitle">Outside window log</span>
+              <span className="dayCount muted">
+                {outsideGrouped.reduce((acc, g) => acc + g.items.length, 0)} outside check-ins
+              </span>
+            </summary>
+
+            <div className="history outsideLogBody" style={{ marginTop: 10 }}>
+              {outsideGrouped.map(({ dateKey, items }) => (
+                <div key={dateKey} className="day" style={{ background: 'transparent' }}>
+                  <div className="daySummary" style={{ cursor: 'default' }}>
+                    <span className="dayTitle">{dateKey}</span>
+                    <span className="dayCount muted">{items.length} outside</span>
+                  </div>
+                  <ul className="list dayList outside" style={{ marginTop: 0 }}>
+                    {items.map((c) => {
+                      const av = avatarFor(c.nickname)
+                      return (
+                        <li key={c.id} className="rowItem outsideRow">
+                          <span className="avatar avatarGrey" aria-hidden="true">
+                            {av.initials}
+                          </span>
+                          <div className="rowText">
+                            <div className="rowTop">
+                              <strong>{c.nickname}</strong>
+                              <span className="pill outsidePill">
+                                Outside 4:30–6:00
+                              </span>
+                            </div>
+                            <div className="muted">{formatDateTime(c.created_at)}</div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
       </main>
     </div>
   )

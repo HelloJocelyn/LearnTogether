@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,7 +42,24 @@ def create_item(payload: schemas.ItemCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/api/checkins", response_model=list[schemas.CheckInOut])
-def list_checkins(limit: int = 50, real_only: bool = False, db: Session = Depends(get_db)):
+def list_checkins(
+  limit: int = 50,
+  real_only: bool = False,
+  start_date: Optional[str] = None,
+  end_date: Optional[str] = None,
+  db: Session = Depends(get_db),
+):
+  tz_name = os.getenv("CHECKIN_TZ")
+  if start_date and end_date:
+    return crud.list_checkins_range(
+      db,
+      limit=limit,
+      real_only=real_only,
+      start_date=start_date,
+      end_date=end_date,
+      tz_name=tz_name,
+    )
+
   return crud.list_checkins(db, limit=limit, real_only=real_only)
 
 

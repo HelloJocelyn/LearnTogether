@@ -27,10 +27,16 @@ export function getHealth() {
   return request<Health>('/api/health')
 }
 
-export function listCheckins(limit = 50, realOnly = false) {
+export function listCheckins(
+  limit = 50,
+  realOnly = false,
+  opts?: { startDate?: string; endDate?: string }
+) {
   const qs = new URLSearchParams({
     limit: String(limit),
     ...(realOnly ? { real_only: 'true' } : {}),
+    ...(opts?.startDate ? { start_date: opts.startDate } : {}),
+    ...(opts?.endDate ? { end_date: opts.endDate } : {}),
   })
   return request<CheckIn[]>(`/api/checkins?${qs.toString()}`)
 }
