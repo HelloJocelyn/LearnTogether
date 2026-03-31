@@ -75,9 +75,9 @@ fi
 PY_VER="$($PYTHON_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 PY_MAJOR="${PY_VER%%.*}"
 PY_MINOR="${PY_VER##*.}"
-if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
-  echo "Python >= 3.10 is required, found: $PY_VER ($PYTHON_BIN)"
-  echo "Use Amazon Linux 2023 (python3.11) or install Python 3.10+ manually, then rerun."
+if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 9 ]; }; then
+  echo "Python >= 3.9 is required, found: $PY_VER ($PYTHON_BIN)"
+  echo "Install Python 3.9+ manually, then rerun."
   exit 1
 fi
 

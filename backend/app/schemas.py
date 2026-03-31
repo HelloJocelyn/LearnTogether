@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,7 +26,7 @@ class CheckInOut(BaseModel):
   created_at: datetime
   nickname: str
   is_real: bool
-  checkin_date_local: str | None = None
+  checkin_date_local: Optional[str] = None
 
 
 AttendanceStatus = Literal["attended", "not_attended", "unknown"]
@@ -34,7 +34,7 @@ AttendanceImportStatus = Literal["draft", "confirmed", "failed"]
 
 
 class AttendanceImportItemUpdate(BaseModel):
-  id: int | None = None
+  id: Optional[int] = None
   name: str = Field(min_length=1, max_length=120)
   attendance_status: AttendanceStatus
 

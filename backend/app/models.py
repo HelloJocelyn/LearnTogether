@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -20,7 +21,7 @@ class CheckIn(Base):
   created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
   nickname: Mapped[str] = mapped_column(String(80), nullable=False)
   is_real: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-  checkin_date_local: Mapped[str | None] = mapped_column(String(10), nullable=True)
+  checkin_date_local: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
 
 class AttendanceImport(Base):

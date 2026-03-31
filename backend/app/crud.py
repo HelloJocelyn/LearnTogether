@@ -1,6 +1,6 @@
 from datetime import datetime, time, timezone, timedelta
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
@@ -220,7 +220,7 @@ def create_attendance_import(
 
 def get_attendance_import(
   db: Session, *, import_id: int
-) -> tuple[AttendanceImport | None, list[AttendanceImportItem]]:
+) -> Tuple[Optional[AttendanceImport], list[AttendanceImportItem]]:
   record = db.get(AttendanceImport, import_id)
   if record is None:
     return None, []
@@ -287,7 +287,7 @@ def update_attendance_import_items(
 
 def confirm_attendance_import(
   db: Session, *, import_id: int
-) -> tuple[AttendanceImport | None, dict[str, int]]:
+) -> Tuple[Optional[AttendanceImport], dict[str, int]]:
   record = db.get(AttendanceImport, import_id)
   if record is None:
     return None, {"total": 0, "attended": 0, "not_attended": 0, "unknown": 0}
