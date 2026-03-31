@@ -72,9 +72,25 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 NODE_MAJOR="$(node -v | sed -E 's/^v([0-9]+).*/\1/')"
 if [ "$NODE_MAJOR" -lt 20 ]; then
-  echo "Node.js >= 20 is required, found: $(node -v)"
-  echo "Install Node.js 20+ and rerun the script."
-  exit 1
+  echo "Node.js >= 20 is required, found: $(node -v). Trying one-time fix..."
+  if [ "$OS_ID" = "amzn" ]; then
+    if command -v dnf >/dev/null 2>&1; then
+      curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+      sudo dnf remove -y nodejs npm || true
+      sudo dnf install -y nodejs --allowerasing
+    elif command -v yum >/dev/null 2>&1; then
+      curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+      sudo yum remove -y nodejs npm || true
+      sudo yum install -y nodejs
+    fi
+  fi
+  hash -r
+  NODE_MAJOR="$(node -v | sed -E 's/^v([0-9]+).*/\1/')"
+  if [ "$NODE_MAJOR" -lt 20 ]; then
+    echo "Node.js >= 20 is still required, found: $(node -v)"
+    echo "Please run manually: sudo dnf remove -y nodejs npm && curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - && sudo dnf install -y nodejs"
+    exit 1
+  fi
 fi
 
 echo "Setting up backend virtualenv and dependencies..."
