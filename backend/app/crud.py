@@ -319,6 +319,9 @@ def create_member(db: Session, *, name: str) -> Member:
   trimmed = name.strip()
   if not trimmed:
     raise ValueError("name is required")
+  parts = [part for part in trimmed.split() if part]
+  if len(parts) != 3:
+    raise ValueError('name must be in format: "nickname role goal"')
 
   existing = list(
     db.scalars(

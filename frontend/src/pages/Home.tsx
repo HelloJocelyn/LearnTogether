@@ -1,6 +1,13 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 
-import { createCheckin, listCheckins, listMembers, type CheckIn, type Member } from '../api'
+import {
+  createCheckin,
+  createMember,
+  listCheckins,
+  listMembers,
+  type CheckIn,
+  type Member,
+} from '../api'
 
 const zoomUrl =
   (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
@@ -70,21 +77,31 @@ export default function Home() {
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
   const [outsideWindow, setOutsideWindow] = useState(false)
+  const memberFormatHint = 'nickname role goal'
   const selectedName =
     typeof selectedMemberId === 'number'
       ? members.find((m) => m.id === selectedMemberId)?.name ?? ''
       : ''
   const canJoin = !joining && (selectedName.trim().length > 0 || nickname.trim().length > 0)
-  const todayKey = useMemo(
-    () => toLocalDateKey(new Date().toISOString()),
+  const todayKey = useMemo(() => toLocalDateKey(new Date().toISOString()), [])
+  const currentZoneDate = useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: displayTz,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date()),
     []
   )
-  const todayJoined = useMemo(() => {
-    const names = new Set(
-      checkins.filter((c) => toLocalDateKey(c.created_at) === todayKey).map((c) => c.nickname.trim())
-    )
-    return names.size
+  const serverTodayKey = useMemo(() => {
+    if (checkins.length === 0) return todayKey
+    return toLocalDateKey(checkins[0]!.created_at)
   }, [checkins, todayKey])
+  const todayJoined = useMemo(() => {
+    const names = new Set(checkins.map((c) => c.nickname.trim()))
+    return names.size
+  }, [checkins])
 
   useEffect(() => {
     listCheckins(500, false, { todayOnly: true })
@@ -106,11 +123,31 @@ export default function Home() {
     const fallback = nickname.trim()
     const name = selectedName || fallback
     if (!name) return
+    if (!selectedName) {
+      const parts = fallback.split(/\s+/).filter(Boolean)
+      if (parts.length !== 3) {
+        setJoinError(`Name must be in format: "${memberFormatHint}"`)
+        return
+      }
+    }
 
     setJoinError(null)
     setOutsideWindow(false)
     setJoining(true)
     try {
+      if (!selectedName) {
+        const normalized = fallback.toLowerCase()
+        const exists = members.some((m) => m.name.trim().toLowerCase() === normalized)
+        if (!exists) {
+          const member = await createMember(fallback)
+          setMembers((prev) => {
+            const alreadyInList = prev.some((m) => m.id === member.id)
+            if (alreadyInList) return prev
+            return [...prev, member].sort((a, b) => a.name.localeCompare(b.name))
+          })
+        }
+      }
+
       const result = await createCheckin(name)
       await refresh()
 
@@ -128,10 +165,8 @@ export default function Home() {
   }
 
   const todaysJoins = useMemo(() => {
-    return checkins
-      .filter((c) => toLocalDateKey(c.created_at) === todayKey)
-      .sort((a, b) => (a.id === b.id ? 0 : a.id > b.id ? -1 : 1))
-  }, [checkins, todayKey])
+    return [...checkins].sort((a, b) => (a.id === b.id ? 0 : a.id > b.id ? -1 : 1))
+  }, [checkins])
 
   const todaysOutside = useMemo(() => {
     return todaysJoins.filter((c) => !c.is_real)
@@ -145,6 +180,7 @@ export default function Home() {
             <h2>Daily Check-In</h2>
             <form onSubmit={onQuickJoin} className="quickJoinForm">
               <div className="muted">Enter your name to check in:</div>
+              <div className="muted">Required format: "{memberFormatHint}"</div>
               <select
                 value={selectedMemberId}
                 onChange={(e) =>
@@ -164,7 +200,7 @@ export default function Home() {
                 <input
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
-                  placeholder="Enter name"
+                  placeholder='Enter name (e.g. "alex student react")'
                 />
               </div>
               <button type="submit" disabled={!canJoin} className="checkinCta">
@@ -200,6 +236,7 @@ export default function Home() {
               <div>
                 <h2>Keep it up</h2>
                 <div className="muted">Today Joined: {todayJoined} Members</div>
+                <div className="muted">Date ({displayTz}): {currentZoneDate}</div>
               </div>
               <img
                 src="/cat.png"
@@ -214,48 +251,35 @@ export default function Home() {
         </div>
 
         <section className="card">
-          <h2>Today's joins</h2>
+          <div className="rowTop">
+            <h2 style={{ marginBottom: 0 }}>Today's joins</h2>
+            <span className="muted">{todaysJoins.length} joins</span>
+          </div>
           {error ? <p className="error">{error}</p> : null}
-          {todaysJoins.length === 0 ? (
-            <p className="muted">No check-ins yet.</p>
-          ) : (
-            <div className="history">
-              <div className="day">
-                <div className="daySummary" style={{ cursor: 'default' }}>
-                  <span className="dayTitle">{todayKey}</span>
-                  <span className="dayCount muted">
-                    {todaysJoins.length} {todaysJoins.length === 1 ? 'join' : 'joins'}
-                  </span>
-                </div>
-
-                <ul className="list dayList">
-                  {todaysJoins.map((c) => {
-                    const av = avatarFor(c.nickname)
-                    return (
-                      <li key={c.id} className="rowItem">
-                        <span
-                          className="avatar"
-                          style={{ background: av.bg }}
-                          aria-hidden="true"
-                        >
-                          {av.initials}
-                        </span>
-                        <div className="rowText">
-                          <div className="rowTop">
-                            <strong>{c.nickname}</strong>
-                            <span className={`pill ${c.is_real ? 'real' : 'outsidePill'}`}>
-                              {c.is_real ? 'Real' : 'Outside window'}
-                            </span>
-                          </div>
-                          <div className="muted">{formatDateTime(c.created_at)}</div>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            </div>
-          )}
+          <ul className="list dayList" style={{ marginTop: 12 }}>
+            {todaysJoins.length === 0 ? (
+              <li className="emptyRow muted">No check-ins yet for today.</li>
+            ) : (
+              todaysJoins.map((c) => {
+                const av = avatarFor(c.nickname)
+                return (
+                  <li key={c.id} className="rowItem">
+                    <span className="avatar" style={{ background: av.bg }} aria-hidden="true">
+                      {av.initials}
+                    </span>
+                    <div className="rowText">
+                      <div className="rowTop">
+                        <strong>{c.nickname}</strong>
+                        {/* <span className={`pill ${c.is_real ? 'real' : 'outsidePill'}`}>
+                          {c.is_real ? 'Real check-in' : 'Outside configured window'}
+                        </span> */}
+                      </div>
+                    </div>
+                  </li>
+                )
+              })
+            )}
+          </ul>
         </section>
 
         {todaysOutside.length > 0 ? (
@@ -270,7 +294,7 @@ export default function Home() {
             <div className="history outsideLogBody" style={{ marginTop: 10 }}>
               <div className="day" style={{ background: 'transparent' }}>
                 <div className="daySummary" style={{ cursor: 'default' }}>
-                  <span className="dayTitle">{todayKey}</span>
+                  <span className="dayTitle">{serverTodayKey}</span>
                   <span className="dayCount muted">{todaysOutside.length} outside</span>
                 </div>
                 <ul className="list dayList outside" style={{ marginTop: 0 }}>

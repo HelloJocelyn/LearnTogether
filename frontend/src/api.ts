@@ -24,6 +24,7 @@ export type CheckIn = {
   created_at: string
   nickname: string
   is_real: boolean
+  checkin_date_local?: string | null
 }
 
 export type AttendanceStatus = 'attended' | 'not_attended' | 'unknown'

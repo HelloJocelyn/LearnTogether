@@ -6,6 +6,7 @@ export default function Members() {
   const [members, setMembers] = useState<Member[]>([])
   const [newMemberName, setNewMemberName] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const formatHint = 'nickname role goal'
 
   useEffect(() => {
     listMembers()
@@ -17,6 +18,11 @@ export default function Members() {
     e.preventDefault()
     const name = newMemberName.trim()
     if (!name) return
+    const parts = name.split(/\s+/).filter(Boolean)
+    if (parts.length !== 3) {
+      setError(`Name must be in format: "${formatHint}"`)
+      return
+    }
     setError(null)
     try {
       const member = await createMember(name)
@@ -49,11 +55,12 @@ export default function Members() {
           <p className="muted">
             Add frequently used names here, then select them from Home quick check-in.
           </p>
+          <p className="muted">Required format: "{formatHint}"</p>
           <form onSubmit={onAddMember} className="row">
             <input
               value={newMemberName}
               onChange={(e) => setNewMemberName(e.target.value)}
-              placeholder="Add new member name"
+              placeholder='Add new member (e.g. "alex student react")'
             />
             <button type="submit" disabled={newMemberName.trim().length === 0}>
               Add
