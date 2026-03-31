@@ -1,5 +1,5 @@
 import './App.css'
-import { Link, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 
 import Home from './pages/Home'
 import Join from './pages/Join'
@@ -15,11 +15,12 @@ function Layout() {
         <div className="navBarInner">
           <div className="navTitle">Learn together</div>
           <nav className="navLinks">
-            <Link to="/">Home</Link>
-            <Link to="/statistics">Statistics</Link>
-            <Link to="/members">Members</Link>
-            <Link to="/settings">Settings</Link>
-            <Link to="/attendance/import">Import</Link>
+            <NavLink to="/" end>
+              Home
+            </NavLink>
+            <NavLink to="/statistics">Statistics</NavLink>
+            <NavLink to="/members">Members</NavLink>
+            <NavLink to="/settings">Settings</NavLink>
           </nav>
         </div>
       </header>

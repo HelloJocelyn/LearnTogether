@@ -1,22 +1,25 @@
 :root {
-  --text: #245;
-  --text-h: #06131f;
-  --bg: radial-gradient(1200px 800px at 30% 0%, #dff6ff 0%, #f3fbff 35%, #ffffff 100%);
-  --surface: rgba(255, 255, 255, 0.72);
-  --surface-2: rgba(240, 252, 255, 0.9);
-  --border: rgba(6, 19, 31, 0.12);
+  --text: #2f2a3a;
+  --text-h: #251b38;
+  --bg:
+    radial-gradient(1200px 700px at 5% -10%, rgba(255, 176, 121, 0.28) 0%, rgba(255, 176, 121, 0) 55%),
+    radial-gradient(900px 600px at 95% 8%, rgba(159, 125, 255, 0.24) 0%, rgba(159, 125, 255, 0) 60%),
+    linear-gradient(180deg, #fff8ef 0%, #f6f1ff 50%, #eef8ff 100%);
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-2: rgba(255, 250, 245, 0.92);
+  --border: rgba(54, 34, 82, 0.12);
   --code-bg: rgba(6, 19, 31, 0.06);
-  --accent: #0ea5e9;
-  --accent-2: #14b8a6;
-  --accent-bg: rgba(14, 165, 233, 0.12);
-  --accent-border: rgba(14, 165, 233, 0.45);
+  --accent: #8f5cff;
+  --accent-2: #ff7aa2;
+  --accent-bg: rgba(143, 92, 255, 0.12);
+  --accent-border: rgba(143, 92, 255, 0.42);
   --social-bg: rgba(255, 255, 255, 0.7);
   --shadow:
-    rgba(2, 32, 71, 0.14) 0 18px 30px -14px,
-    rgba(2, 32, 71, 0.08) 0 8px 16px -10px;
+    rgba(93, 55, 156, 0.16) 0 20px 30px -18px,
+    rgba(255, 143, 177, 0.14) 0 10px 24px -18px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --sans: 'Segoe UI', 'Trebuchet MS', 'Gill Sans', system-ui, sans-serif;
+  --heading: 'Trebuchet MS', 'Segoe UI', 'Gill Sans', system-ui, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
@@ -76,7 +79,7 @@ body {
 h1,
 h2 {
   font-family: var(--heading);
-  font-weight: 500;
+  font-weight: 700;
   color: var(--text-h);
 }
 
@@ -92,7 +95,7 @@ h1 {
 h2 {
   font-size: 24px;
   line-height: 118%;
-  letter-spacing: -0.24px;
+  letter-spacing: 0.2px;
   margin: 0 0 8px;
   @media (max-width: 1024px) {
     font-size: 20px;

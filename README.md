@@ -58,24 +58,28 @@ Backend marks a check-in as **real** only if it happens within the configured ti
 
 - **This project default**: timezone `Asia/Tokyo`, window `04:30` to `06:00`
 - **Override timezone**: set `CHECKIN_TZ` (IANA name), e.g. `Asia/Tokyo`, `America/Los_Angeles`
-- **Window config file**: `backend/config/checkin_window.json`
+- **Environment-based defaults**:
+  - local: `backend/config/checkin_window.local.json` (near 24h)
+  - production: `backend/config/checkin_window.production.json` (`04:30` - `08:00`)
+- **Window config file (explicit override)**: set `CHECKIN_CONFIG_FILE` to point to a JSON file
   - `start` (format `HH:MM`, 24-hour)
   - `end` (format `HH:MM`, 24-hour)
-- **Optional custom config path**: set `CHECKIN_CONFIG_FILE` to point to a JSON file
+- **Environment selector**: set `APP_ENV` to `local` or `production` (default: `local`)
 
 Example:
 
 ```bash
 export CHECKIN_TZ=Asia/Tokyo
-export CHECKIN_CONFIG_FILE=./config/checkin_window.json
+export APP_ENV=local
+export CHECKIN_CONFIG_FILE=./config/checkin_window.local.json
 ```
 
-`backend/config/checkin_window.json`:
+`backend/config/checkin_window.local.json`:
 
 ```json
 {
-  "start": "04:30",
-  "end": "06:00"
+  "start": "00:10",
+  "end": "23:30"
 }
 ```
 

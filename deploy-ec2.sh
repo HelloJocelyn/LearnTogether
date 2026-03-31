@@ -123,8 +123,9 @@ After=network.target
 Type=simple
 User=$(id -un)
 WorkingDirectory=${SCRIPT_DIR}/backend
+Environment=APP_ENV=production
 Environment=CHECKIN_TZ=${CHECKIN_TZ:-Asia/Tokyo}
-Environment=CHECKIN_CONFIG_FILE=${SCRIPT_DIR}/backend/config/checkin_window.json
+Environment=CHECKIN_CONFIG_FILE=${SCRIPT_DIR}/backend/config/checkin_window.production.json
 ExecStart=${SCRIPT_DIR}/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=3

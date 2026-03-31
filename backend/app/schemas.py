@@ -91,3 +91,13 @@ class MemberOut(BaseModel):
   name: str
   is_active: bool
 
+
+class CheckinWindowConfig(BaseModel):
+  start: str = Field(pattern=r"^\d{2}:\d{2}$")
+  end: str = Field(pattern=r"^\d{2}:\d{2}$")
+
+
+class CheckinWindowConfigOut(CheckinWindowConfig):
+  app_env: str
+  source: str
+

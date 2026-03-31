@@ -9,7 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
 from . import crud, schemas
-from .checkin_config import load_checkin_window_config
+from .checkin_config import (
+  load_checkin_window_config,
+  resolve_checkin_config_path,
+  save_checkin_window_config,
+)
 from .db import get_db, init_db
 
 
@@ -145,6 +149,25 @@ def create_member(payload: schemas.MemberCreate, db: Session = Depends(get_db)):
 @app.delete("/api/members/{member_id}", status_code=204)
 def delete_member(member_id: int, db: Session = Depends(get_db)):
   crud.deactivate_member(db, member_id=member_id)
+
+
+@app.get("/api/settings/checkin-window", response_model=schemas.CheckinWindowConfigOut)
+def get_checkin_window_config():
+  window = load_checkin_window_config()
+  app_env = os.getenv("APP_ENV", "local").strip().lower() or "local"
+  source = str(resolve_checkin_config_path())
+  return schemas.CheckinWindowConfigOut(**window, app_env=app_env, source=source)
+
+
+@app.put("/api/settings/checkin-window", response_model=schemas.CheckinWindowConfigOut)
+def update_checkin_window_config(payload: schemas.CheckinWindowConfig):
+  try:
+    saved = save_checkin_window_config(start=payload.start, end=payload.end)
+  except ValueError as exc:
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
+  app_env = os.getenv("APP_ENV", "local").strip().lower() or "local"
+  source = str(resolve_checkin_config_path())
+  return schemas.CheckinWindowConfigOut(**saved, app_env=app_env, source=source)
 
 
 def _normalize_status(raw: str) -> schemas.AttendanceStatus:

@@ -58,6 +58,13 @@ export type Member = {
   is_active: boolean
 }
 
+export type CheckinWindowConfig = {
+  start: string
+  end: string
+  app_env: string
+  source: string
+}
+
 export function getHealth() {
   return request<Health>('/api/health')
 }
@@ -134,6 +141,17 @@ export function createMember(name: string) {
 export function deleteMember(memberId: number) {
   return request<void>(`/api/members/${memberId}`, {
     method: 'DELETE',
+  })
+}
+
+export function getCheckinWindowConfig() {
+  return request<CheckinWindowConfig>('/api/settings/checkin-window')
+}
+
+export function updateCheckinWindowConfig(start: string, end: string) {
+  return request<CheckinWindowConfig>('/api/settings/checkin-window', {
+    method: 'PUT',
+    body: JSON.stringify({ start, end }),
   })
 }
 

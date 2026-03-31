@@ -14,6 +14,18 @@ function dateKey(year: number, month1Based: number, day: number) {
   return `${year}-${pad2(month1Based)}-${pad2(day)}`
 }
 
+function parseDateKey(raw: string): { y: number; m: number; day: number } | null {
+  const trimmed = raw.trim()
+  const match = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+  if (!match) return null
+  const y = Number(match[1])
+  const m = Number(match[2])
+  const day = Number(match[3])
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(day)) return null
+  if (m < 1 || m > 12 || day < 1 || day > 31) return null
+  return { y, m, day }
+}
+
 function getTzYMDParts(d: Date, tz: string) {
   // en-CA ensures it returns YYYY-MM-DD with the given timezone.
   const dtf = new Intl.DateTimeFormat('en-CA', {
@@ -25,6 +37,14 @@ function getTzYMDParts(d: Date, tz: string) {
   const parts = dtf.format(d).split('-').map((x) => Number(x))
   const [y, m, day] = parts
   return { y, m, day }
+}
+
+function getCheckinYMD(c: CheckIn, tz: string) {
+  if (c.checkin_date_local) {
+    const parsed = parseDateKey(c.checkin_date_local)
+    if (parsed) return parsed
+  }
+  return getTzYMDParts(new Date(c.created_at), tz)
 }
 
 function getMonthLabel(year: number, month1Based: number) {
@@ -84,8 +104,8 @@ export default function CheckinAnalytics() {
 
     setLoading(true)
     setError(null)
-    // Analytics main view: only count real check-ins.
-    listCheckins(5000, true, { startDate: startKey, endDate: endKey })
+    // Include all check-ins so statistics is visible even outside real window.
+    listCheckins(5000, false, { startDate: startKey, endDate: endKey })
       .then(setCheckins)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
@@ -94,7 +114,7 @@ export default function CheckinAnalytics() {
   const checkinsByDateKey = useMemo(() => {
     const map = new Map<string, CheckIn[]>()
     for (const c of checkins) {
-      const parts = getTzYMDParts(new Date(c.created_at), tz)
+      const parts = getCheckinYMD(c, tz)
       const key = dateKey(parts.y, parts.m, parts.day)
       const arr = map.get(key)
       if (arr) arr.push(c)
@@ -116,26 +136,26 @@ export default function CheckinAnalytics() {
 
     return days.map((k) => {
       const arr = checkinsByDateKey.get(k) ?? []
-      const real = arr.length
-      return { dateKey: k, real }
+      const joined = arr.length
+      return { dateKey: k, joined }
     })
   }, [checkinsByDateKey, now, tz])
 
   const yearlyData = useMemo(() => {
-    const map = new Map<string, { real: number }>()
+    const map = new Map<string, { joined: number }>()
     for (const c of checkins) {
-      const parts = getTzYMDParts(new Date(c.created_at), tz)
+      const parts = getCheckinYMD(c, tz)
       const mKey = `${parts.y}-${pad2(parts.m)}`
-      const cur = map.get(mKey) ?? { real: 0 }
-      cur.real += 1
+      const cur = map.get(mKey) ?? { joined: 0 }
+      cur.joined += 1
       map.set(mKey, cur)
     }
 
     // Render the selected year only; if you want rolling 12 months, we can adjust.
-    const res: Array<{ monthKey: string; real: number }> = []
+    const res: Array<{ monthKey: string; joined: number }> = []
     for (let m = 1; m <= 12; m++) {
       const mKey = `${selectedYear}-${pad2(m)}`
-      const v = map.get(mKey) ?? { real: 0 }
+      const v = map.get(mKey) ?? { joined: 0 }
       res.push({ monthKey: mKey, ...v })
     }
     return res
@@ -148,10 +168,10 @@ export default function CheckinAnalytics() {
 
     const usersSet = new Set<string>()
 
-    // statusByUserDay[nickname][dateKey] => true (real check-in exists)
+    // statusByUserDay[nickname][dateKey] => true (check-in exists)
     const statusByUserDay = new Map<string, Map<string, true>>()
     for (const c of checkins) {
-      const p = getTzYMDParts(new Date(c.created_at), tz)
+      const p = getCheckinYMD(c, tz)
       if (p.y !== selectedYear || p.m !== selectedMonth) continue
       usersSet.add(c.nickname)
       const dKey = dateKey(p.y, p.m, p.day)
@@ -167,7 +187,7 @@ export default function CheckinAnalytics() {
   const availableYears = useMemo(() => {
     const s = new Set<number>()
     for (const c of checkins) {
-      const p = getTzYMDParts(new Date(c.created_at), tz)
+      const p = getCheckinYMD(c, tz)
       s.add(p.y)
     }
     const arr = Array.from(s).sort((a, b) => a - b)
@@ -232,7 +252,7 @@ export default function CheckinAnalytics() {
             <div key={d.dateKey} className="dailyCell">
               <div className="dailyDate">{d.dateKey.slice(5)}</div>
               <div className="dailyCount real">
-                {d.real} <span className="dailySmall">real</span>
+                {d.joined} <span className="dailySmall">joins</span>
               </div>
             </div>
           ))}
@@ -245,7 +265,7 @@ export default function CheckinAnalytics() {
             <div key={m.monthKey} className="yearTile">
               <div className="yearMonth">{getMonthLabel(selectedYear, Number(m.monthKey.slice(5, 7)))}</div>
               <div className="yearCounts">
-                <span className="dot realDot" /> {m.real}
+                <span className="dot realDot" /> {m.joined}
               </div>
             </div>
           ))}
@@ -256,7 +276,7 @@ export default function CheckinAnalytics() {
         <div className="matrixWrap">
           <div className="matrixLegend">
             <span className="legendItem">
-              <span className="legendChip realChip" /> Real
+              <span className="legendChip realChip" /> Checked-in
             </span>
             <span className="legendItem">
               <span className="legendChip emptyChip" /> No check-in
@@ -268,7 +288,7 @@ export default function CheckinAnalytics() {
               <div
                 className="matrixHeaderRow"
                 style={{
-                  gridTemplateColumns: `180px repeat(${monthlyMatrix.days.length}, 28px)`,
+                  gridTemplateColumns: `160px repeat(${monthlyMatrix.days.length}, minmax(0, 1fr))`,
                 }}
               >
                 <div className="matrixUserHeader">Users</div>
@@ -287,14 +307,16 @@ export default function CheckinAnalytics() {
                     key={u}
                     className="matrixUserRow"
                     style={{
-                      gridTemplateColumns: `180px repeat(${monthlyMatrix.days.length}, 28px)`,
+                      gridTemplateColumns: `160px repeat(${monthlyMatrix.days.length}, minmax(0, 1fr))`,
                     }}
                   >
                     <div className="matrixUserCell">
                       <span className="avatarMini" style={{ background: av.bg }}>
                         {av.initials}
                       </span>
-                      <span className="userName">{u}</span>
+                      <span className="userName" title={u}>
+                        {u}
+                      </span>
                     </div>
 
                     {monthlyMatrix.days.map((d) => {
@@ -311,14 +333,9 @@ export default function CheckinAnalytics() {
                         <div
                           key={d}
                           className="cell real"
-                          title="Real check-in"
+                          title="Checked-in"
                         >
-                          <span
-                            className="cellInner"
-                            style={{ background: av.bg }}
-                          >
-                            {av.initials}
-                          </span>
+                          <span className="cellInner" />
                         </div>
                       )
                     })}
