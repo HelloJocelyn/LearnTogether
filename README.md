@@ -23,8 +23,7 @@ The frontend proxies `/api` to the backend via Nginx, so the UI calls the backen
 This repo includes a native deployment script for running frontend + backend on the same EC2 host:
 
 ```bash
-chmod +x deploy-ec2.sh
-./deploy-ec2.sh
+bash deploy-ec2.sh
 ```
 
 What it does:
@@ -46,6 +45,16 @@ Notes:
 - Open inbound security-group rules for the frontend port (default TCP 80)
 - Backend is bound to `127.0.0.1:8000` and is proxied by Nginx at `/api`
 - Amazon Linux is supported explicitly; script installs Node.js 20+ automatically
+
+### Update after code changes (EC2)
+
+After the first deployment, use this one-command update script:
+
+```bash
+bash update-ec2.sh
+```
+
+It will pull latest code, rebuild frontend, refresh backend dependencies, and restart services.
 
 ## QR join + Zoom redirect
 
