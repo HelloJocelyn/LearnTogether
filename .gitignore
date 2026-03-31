@@ -1,6 +1,8 @@
 .DS_Store
 .idea/
 .vscode/
+.venv/
+.env.ec2
 
 # Node / Vite
 frontend/node_modules/
