@@ -7,6 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
+PYTHON_BIN="python3"
 
 OS_ID=""
 if [ -f /etc/os-release ]; then
@@ -38,7 +39,8 @@ if [ "$OS_ID" = "amzn" ]; then
     # Resolve known Amazon Linux curl/curl-minimal conflicts first.
     sudo dnf install -y --allowerasing curl-minimal libcurl-minimal
     sudo dnf remove -y curl libcurl || true
-    sudo dnf install -y python3 python3-pip nginx git
+    sudo dnf install -y python3.11 python3.11-pip nginx git
+    PYTHON_BIN="python3.11"
     if ! command -v curl >/dev/null 2>&1; then
       sudo dnf install -y curl-minimal
     fi
@@ -63,6 +65,19 @@ elif command -v yum >/dev/null 2>&1; then
   sudo yum install -y python3 python3-pip nodejs npm nginx git
 else
   echo "Unsupported package manager. Install python3, pip, node, npm, nginx, git manually."
+  exit 1
+fi
+
+if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
+  echo "Python interpreter not found: $PYTHON_BIN"
+  exit 1
+fi
+PY_VER="$($PYTHON_BIN -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+PY_MAJOR="${PY_VER%%.*}"
+PY_MINOR="${PY_VER##*.}"
+if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
+  echo "Python >= 3.10 is required, found: $PY_VER ($PYTHON_BIN)"
+  echo "Use Amazon Linux 2023 (python3.11) or install Python 3.10+ manually, then rerun."
   exit 1
 fi
 
@@ -94,7 +109,7 @@ if [ "$NODE_MAJOR" -lt 20 ]; then
 fi
 
 echo "Setting up backend virtualenv and dependencies..."
-python3 -m venv backend/.venv
+"$PYTHON_BIN" -m venv backend/.venv
 backend/.venv/bin/pip install --upgrade pip
 backend/.venv/bin/pip install -r backend/requirements.txt
 
