@@ -35,12 +35,21 @@ echo "Installing system packages..."
 if [ "$OS_ID" = "amzn" ]; then
   echo "Amazon Linux detected."
   if command -v dnf >/dev/null 2>&1; then
-    sudo dnf install -y python3 python3-pip nginx git curl
+    # Resolve known Amazon Linux curl/curl-minimal conflicts first.
+    sudo dnf install -y --allowerasing curl-minimal libcurl-minimal
+    sudo dnf remove -y curl libcurl || true
+    sudo dnf install -y python3 python3-pip nginx git
+    if ! command -v curl >/dev/null 2>&1; then
+      sudo dnf install -y curl-minimal
+    fi
     # Force Node 20+ from NodeSource to avoid older distro default (often Node 18).
     curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
     sudo dnf install -y nodejs --allowerasing
   else
-    sudo yum install -y python3 python3-pip nginx git curl
+    sudo yum install -y python3 python3-pip nginx git
+    if ! command -v curl >/dev/null 2>&1; then
+      sudo yum install -y curl-minimal || sudo yum install -y curl
+    fi
     # Force Node 20+ from NodeSource to avoid older distro default (often Node 18).
     curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
     sudo yum install -y nodejs
