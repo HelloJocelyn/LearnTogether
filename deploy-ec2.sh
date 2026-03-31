@@ -8,6 +8,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+OS_ID=""
+if [ -f /etc/os-release ]; then
+  # shellcheck disable=SC1091
+  source /etc/os-release
+  OS_ID="${ID:-}"
+fi
+
 if [ ! -f ".env.ec2" ]; then
   cat > .env.ec2 <<'EOF'
 # Timezone used by backend check-in logic
@@ -25,7 +32,20 @@ git checkout main
 git pull --ff-only origin main
 
 echo "Installing system packages..."
-if command -v apt-get >/dev/null 2>&1; then
+if [ "$OS_ID" = "amzn" ]; then
+  echo "Amazon Linux detected."
+  if command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y python3 python3-pip nginx git curl
+    # Force Node 20+ from NodeSource to avoid older distro default (often Node 18).
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+    sudo dnf install -y nodejs --allowerasing
+  else
+    sudo yum install -y python3 python3-pip nginx git curl
+    # Force Node 20+ from NodeSource to avoid older distro default (often Node 18).
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+    sudo yum install -y nodejs
+  fi
+elif command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update
   sudo apt-get install -y python3 python3-venv python3-pip nodejs npm nginx git
 elif command -v dnf >/dev/null 2>&1; then
@@ -34,6 +54,17 @@ elif command -v yum >/dev/null 2>&1; then
   sudo yum install -y python3 python3-pip nodejs npm nginx git
 else
   echo "Unsupported package manager. Install python3, pip, node, npm, nginx, git manually."
+  exit 1
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "Node.js was not installed correctly."
+  exit 1
+fi
+NODE_MAJOR="$(node -v | sed -E 's/^v([0-9]+).*/\1/')"
+if [ "$NODE_MAJOR" -lt 20 ]; then
+  echo "Node.js >= 20 is required, found: $(node -v)"
+  echo "Install Node.js 20+ and rerun the script."
   exit 1
 fi
 

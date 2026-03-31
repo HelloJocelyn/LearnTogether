@@ -45,6 +45,7 @@ Notes:
 
 - Open inbound security-group rules for the frontend port (default TCP 80)
 - Backend is bound to `127.0.0.1:8000` and is proxied by Nginx at `/api`
+- Amazon Linux is supported explicitly; script installs Node.js 20+ automatically
 
 ## QR join + Zoom redirect
 
