@@ -10,6 +10,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+if [ -f ".env.ec2" ]; then
+  set -a
+  source ".env.ec2"
+  set +a
+fi
+
 if [ ! -d ".git" ]; then
   echo "Run this script from the repo root on EC2."
   exit 1
@@ -39,6 +45,15 @@ echo "Deploying frontend build..."
 sudo mkdir -p /var/www/learntogether
 sudo rm -rf /var/www/learntogether/*
 sudo cp -r frontend/dist/* /var/www/learntogether/
+
+echo "Ensuring backend runs in production mode..."
+sudo mkdir -p /etc/systemd/system/learntogether-backend.service.d
+sudo tee /etc/systemd/system/learntogether-backend.service.d/env.conf >/dev/null <<EOF
+[Service]
+Environment=APP_ENV=production
+Environment=CHECKIN_TZ=${CHECKIN_TZ:-Asia/Tokyo}
+Environment=CHECKIN_CONFIG_FILE=${SCRIPT_DIR}/backend/config/checkin_window.production.json
+EOF
 
 echo "Restarting services..."
 sudo systemctl daemon-reload
