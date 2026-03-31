@@ -1,0 +1,13 @@
+services:
+  backend:
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=sqlite:////data/app.db
+      - CHECKIN_TZ=${CHECKIN_TZ:-Asia/Tokyo}
+      - CHECKIN_CONFIG_FILE=/app/config/checkin_window.json
+
+  frontend:
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+

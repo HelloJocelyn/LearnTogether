@@ -18,6 +18,34 @@ docker compose up --build
 
 The frontend proxies `/api` to the backend via Nginx, so the UI calls the backend using a relative `/api/...` URL (no CORS setup needed).
 
+## Deploy on one EC2 instance (without Docker)
+
+This repo includes a native deployment script for running frontend + backend on the same EC2 host:
+
+```bash
+chmod +x deploy-ec2.sh
+./deploy-ec2.sh
+```
+
+What it does:
+
+- Installs required packages (`python3`, `pip`, `node`, `npm`, `nginx`, `git`)
+- Creates `.env.ec2` on first run (default `CHECKIN_TZ=Asia/Tokyo`)
+- Pulls latest `main`
+- Creates backend virtualenv and installs Python dependencies
+- Builds frontend static files
+- Configures `systemd` backend service and Nginx reverse proxy (`/api` -> backend)
+
+After deploy:
+
+- Website: `http://<EC2_PUBLIC_IP>:80`
+- API health: `http://<EC2_PUBLIC_IP>:80/api/health`
+
+Notes:
+
+- Open inbound security-group rules for the frontend port (default TCP 80)
+- Backend is bound to `127.0.0.1:8000` and is proxied by Nginx at `/api`
+
 ## QR join + Zoom redirect
 
 - Home page shows a QR code that points to `/join`
