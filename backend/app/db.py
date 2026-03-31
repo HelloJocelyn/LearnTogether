@@ -45,4 +45,7 @@ def init_db() -> None:
       if "is_real" not in cols:
         with engine.begin() as conn:
           conn.execute(text("ALTER TABLE checkins ADD COLUMN is_real BOOLEAN NOT NULL DEFAULT 0"))
+      if "checkin_date_local" not in cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE checkins ADD COLUMN checkin_date_local TEXT"))
 

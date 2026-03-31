@@ -1,24 +1,39 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { QRCodeCanvas } from 'qrcode.react'
 
-import { createCheckin, listCheckins, type CheckIn } from '../api'
-import CheckinAnalytics from '../components/CheckinAnalytics'
+import { createCheckin, listCheckins, listMembers, type CheckIn, type Member } from '../api'
 
 const zoomUrl =
   (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
   'https://zoom.us/join'
 
+const displayTz = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
+
 function formatDateTime(iso: string) {
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
+  if (Number.isNaN(d.getTime())) return iso
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone: displayTz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(d)
 }
 
 function toLocalDateKey(iso: string) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return 'Unknown date'
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: displayTz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  const yyyy = parts.find((p) => p.type === 'year')?.value ?? '0000'
+  const mm = parts.find((p) => p.type === 'month')?.value ?? '00'
+  const dd = parts.find((p) => p.type === 'day')?.value ?? '00'
   return `${yyyy}-${mm}-${dd}`
 }
 
@@ -47,28 +62,49 @@ function avatarFor(nickname: string) {
 }
 
 export default function Home() {
-  const joinUrl = useMemo(() => `${window.location.origin}/join`, [])
   const [checkins, setCheckins] = useState<CheckIn[]>([])
   const [error, setError] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
+  const [members, setMembers] = useState<Member[]>([])
+  const [selectedMemberId, setSelectedMemberId] = useState<number | ''>('')
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
   const [outsideWindow, setOutsideWindow] = useState(false)
+  const selectedName =
+    typeof selectedMemberId === 'number'
+      ? members.find((m) => m.id === selectedMemberId)?.name ?? ''
+      : ''
+  const canJoin = !joining && (selectedName.trim().length > 0 || nickname.trim().length > 0)
+  const todayKey = useMemo(
+    () => toLocalDateKey(new Date().toISOString()),
+    []
+  )
+  const todayJoined = useMemo(() => {
+    const names = new Set(
+      checkins.filter((c) => toLocalDateKey(c.created_at) === todayKey).map((c) => c.nickname.trim())
+    )
+    return names.size
+  }, [checkins, todayKey])
 
   useEffect(() => {
-    listCheckins(200, false)
+    listCheckins(500, false, { todayOnly: true })
       .then(setCheckins)
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+
+    listMembers()
+      .then(setMembers)
+      .catch((e: unknown) => console.error(e))
   }, [])
 
   async function refresh() {
-    const data = await listCheckins(200, false)
+    const data = await listCheckins(500, false, { todayOnly: true })
     setCheckins(data)
   }
 
   async function onQuickJoin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const name = nickname.trim()
+    const fallback = nickname.trim()
+    const name = selectedName || fallback
     if (!name) return
 
     setJoinError(null)
@@ -91,197 +127,176 @@ export default function Home() {
     }
   }
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, CheckIn[]>()
-    for (const c of checkins) {
-      const key = toLocalDateKey(c.created_at)
-      const arr = map.get(key)
-      if (arr) arr.push(c)
-      else map.set(key, [c])
-    }
+  const todaysJoins = useMemo(() => {
+    return checkins
+      .filter((c) => toLocalDateKey(c.created_at) === todayKey)
+      .sort((a, b) => (a.id === b.id ? 0 : a.id > b.id ? -1 : 1))
+  }, [checkins, todayKey])
 
-    return Array.from(map.entries())
-      .sort(([a], [b]) => (a === b ? 0 : a < b ? 1 : -1)) // newest date first
-      .map(([dateKey, items]) => ({
-        dateKey,
-        items: items.sort((x, y) => (x.id === y.id ? 0 : x.id > y.id ? -1 : 1)),
-      }))
-  }, [checkins])
-
-  const outsideGrouped = useMemo(() => {
-    return grouped
-      .map(({ dateKey, items }) => ({
-        dateKey,
-        items: items.filter((x) => !x.is_real),
-      }))
-      .filter(({ items }) => items.length > 0)
-  }, [grouped])
+  const todaysOutside = useMemo(() => {
+    return todaysJoins.filter((c) => !c.is_real)
+  }, [todaysJoins])
 
   return (
     <div className="page">
-      <header className="header">
-        <div className="titleRow">
-          <h1 className="title">LearnTogether</h1>
-          <span className="tagline">今日も一緒に、一歩ずつ</span>
-        </div>
-        <div className="muted">Join & learn together</div>
-      </header>
-
       <main className="main">
-        <section className="card">
-          <h2>Quick Join</h2>
-          <p className="muted">
-            Joining from a laptop? Enter your nickname here and jump straight to Zoom.
-          </p>
-          <form onSubmit={onQuickJoin} className="row">
-            <input
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="Your nickname"
-            />
-            <button type="submit" disabled={joining || nickname.trim().length === 0}>
-              {joining ? 'Joining…' : 'Join Zoom'}
-            </button>
-          </form>
-          {joinError ? <p className="error">{joinError}</p> : null}
-          {outsideWindow ? (
-            <div className="notice">
-              <div className="noticeTitle">Quick heads-up</div>
-              <div className="muted">
-                It’s currently outside the <strong>4:30–6:00</strong> check-in window,
-                so this check-in <strong>won’t count</strong> as a real check-in.
+        <div className="topPanel">
+          <section className="card quickJoinSquare">
+            <h2>Daily Check-In</h2>
+            <form onSubmit={onQuickJoin} className="quickJoinForm">
+              <div className="muted">Enter your name to check in:</div>
+              <select
+                value={selectedMemberId}
+                onChange={(e) =>
+                  setSelectedMemberId(e.target.value === '' ? '' : Number(e.target.value))
+                }
+              >
+                <option value="">
+                  {members.length > 0 ? 'Choose saved name' : 'No saved names yet'}
+                </option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <div className="inputEditRow">
+                <input
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="Enter name"
+                />
               </div>
-              <div className="row" style={{ marginTop: 12 }}>
-                <button type="button" onClick={() => window.location.assign(zoomUrl)}>
-                  Continue to Zoom
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => setOutsideWindow(false)}
-                >
-                  Stay here
-                </button>
+              <button type="submit" disabled={!canJoin} className="checkinCta">
+                {joining ? 'Joining…' : 'Join Zoom'}
+              </button>
+            </form>
+            {joinError ? <p className="error">{joinError}</p> : null}
+            {outsideWindow ? (
+              <div className="notice">
+                <div className="noticeTitle">Quick heads-up</div>
+                <div className="muted">
+                  It’s currently outside the configured check-in window,
+                  so this check-in <strong>won’t count</strong> as a real check-in.
+                </div>
+                <div className="row" style={{ marginTop: 12 }}>
+                  <button type="button" onClick={() => window.location.assign(zoomUrl)}>
+                    Continue to Zoom
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setOutsideWindow(false)}
+                  >
+                    Stay here
+                  </button>
+                </div>
               </div>
-            </div>
-          ) : null}
-        </section>
+            ) : null}
+          </section>
 
-        <details className="card" open={false}>
-          <summary className="shareSummary">
-            <span>Share this site (QR)</span>
-            <span className="muted">collapsed</span>
-          </summary>
-          <div className="shareBody">
-            <p className="muted">
-              This QR code is for you to share the join page with others.
-            </p>
-            <div className="qrWrap">
-              <QRCodeCanvas value={joinUrl} size={220} includeMargin />
+          <section className="card keepUpCard">
+            <div className="keepUpInner">
+              <div>
+                <h2>Keep it up</h2>
+                <div className="muted">Today Joined: {todayJoined} Members</div>
+              </div>
+              <img
+                src="/cat.png"
+                alt="Study cat"
+                className="keepUpCat"
+                onError={(e) => {
+                  ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                }}
+              />
             </div>
-            <p className="muted">
-              Link: <a href="/join">{joinUrl}</a>
-            </p>
-          </div>
-        </details>
+          </section>
+        </div>
 
         <section className="card">
-          <h2>Historical check-ins</h2>
+          <h2>Today's joins</h2>
           {error ? <p className="error">{error}</p> : null}
-          {grouped.length === 0 ? (
+          {todaysJoins.length === 0 ? (
             <p className="muted">No check-ins yet.</p>
           ) : (
             <div className="history">
-              {grouped.map(({ dateKey, items }) => {
-                const real = items.filter((x) => x.is_real)
-                return (
-                  <details key={dateKey} className="day" open={false}>
-                    <summary className="daySummary">
-                      <span className="dayTitle">{dateKey}</span>
-                      <span className="dayCount muted">
-                        {real.length} {real.length === 1 ? 'real check-in' : 'real check-ins'}
-                      </span>
-                    </summary>
+              <div className="day">
+                <div className="daySummary" style={{ cursor: 'default' }}>
+                  <span className="dayTitle">{todayKey}</span>
+                  <span className="dayCount muted">
+                    {todaysJoins.length} {todaysJoins.length === 1 ? 'join' : 'joins'}
+                  </span>
+                </div>
 
-                    <ul className="list dayList">
-                      {real.length === 0 ? (
-                        <li className="muted emptyRow">No real check-ins.</li>
-                      ) : (
-                        real.map((c) => {
-                          const av = avatarFor(c.nickname)
-                          return (
-                            <li key={c.id} className="rowItem">
-                              <span
-                                className="avatar"
-                                style={{ background: av.bg }}
-                                aria-hidden="true"
-                              >
-                                {av.initials}
-                              </span>
-                              <div className="rowText">
-                                <div className="rowTop">
-                                  <strong>{c.nickname}</strong>
-                                  <span className="pill real">Real</span>
-                                </div>
-                                <div className="muted">{formatDateTime(c.created_at)}</div>
-                              </div>
-                            </li>
-                          )
-                        })
-                      )}
-                    </ul>
-                  </details>
-                )
-              })}
+                <ul className="list dayList">
+                  {todaysJoins.map((c) => {
+                    const av = avatarFor(c.nickname)
+                    return (
+                      <li key={c.id} className="rowItem">
+                        <span
+                          className="avatar"
+                          style={{ background: av.bg }}
+                          aria-hidden="true"
+                        >
+                          {av.initials}
+                        </span>
+                        <div className="rowText">
+                          <div className="rowTop">
+                            <strong>{c.nickname}</strong>
+                            <span className={`pill ${c.is_real ? 'real' : 'outsidePill'}`}>
+                              {c.is_real ? 'Real' : 'Outside window'}
+                            </span>
+                          </div>
+                          <div className="muted">{formatDateTime(c.created_at)}</div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
             </div>
           )}
         </section>
 
-        <section className="card">
-          <CheckinAnalytics />
-        </section>
-
-        {outsideGrouped.length > 0 ? (
-          <details className="card" open={false}>
-            <summary className="daySummary outsideLogSummary" style={{ cursor: 'pointer' }}>
+        {todaysOutside.length > 0 ? (
+          <section className="card">
+            <div className="daySummary outsideLogSummary" style={{ cursor: 'default' }}>
               <span className="dayTitle">Outside window log</span>
               <span className="dayCount muted">
-                {outsideGrouped.reduce((acc, g) => acc + g.items.length, 0)} outside check-ins
+                {todaysOutside.length} outside check-ins
               </span>
-            </summary>
+            </div>
 
             <div className="history outsideLogBody" style={{ marginTop: 10 }}>
-              {outsideGrouped.map(({ dateKey, items }) => (
-                <div key={dateKey} className="day" style={{ background: 'transparent' }}>
-                  <div className="daySummary" style={{ cursor: 'default' }}>
-                    <span className="dayTitle">{dateKey}</span>
-                    <span className="dayCount muted">{items.length} outside</span>
-                  </div>
-                  <ul className="list dayList outside" style={{ marginTop: 0 }}>
-                    {items.map((c) => {
-                      const av = avatarFor(c.nickname)
-                      return (
-                        <li key={c.id} className="rowItem outsideRow">
-                          <span className="avatar avatarGrey" aria-hidden="true">
-                            {av.initials}
-                          </span>
-                          <div className="rowText">
-                            <div className="rowTop">
-                              <strong>{c.nickname}</strong>
-                              <span className="pill outsidePill">
-                                Outside 4:30–6:00
-                              </span>
-                            </div>
-                            <div className="muted">{formatDateTime(c.created_at)}</div>
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ul>
+              <div className="day" style={{ background: 'transparent' }}>
+                <div className="daySummary" style={{ cursor: 'default' }}>
+                  <span className="dayTitle">{todayKey}</span>
+                  <span className="dayCount muted">{todaysOutside.length} outside</span>
                 </div>
-              ))}
+                <ul className="list dayList outside" style={{ marginTop: 0 }}>
+                  {todaysOutside.map((c) => {
+                    const av = avatarFor(c.nickname)
+                    return (
+                      <li key={c.id} className="rowItem outsideRow">
+                        <span className="avatar avatarGrey" aria-hidden="true">
+                          {av.initials}
+                        </span>
+                        <div className="rowText">
+                          <div className="rowTop">
+                            <strong>{c.nickname}</strong>
+                            <span className="pill outsidePill">
+                              Outside configured window
+                            </span>
+                          </div>
+                          <div className="muted">{formatDateTime(c.created_at)}</div>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
             </div>
-          </details>
+          </section>
         ) : null}
       </main>
     </div>

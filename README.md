@@ -25,15 +25,29 @@ The frontend proxies `/api` to the backend via Nginx, so the UI calls the backen
 
 ## Check-in time window (real check-ins)
 
-Backend marks a check-in as **real** only if it happens between **04:30–06:00** (inclusive) in the configured timezone.
+Backend marks a check-in as **real** only if it happens within the configured time window (inclusive), in the configured timezone.
 
-- **This project default**: `Asia/Tokyo` (set in `docker-compose.yml`)
+- **This project default**: timezone `Asia/Tokyo`, window `04:30` to `06:00`
 - **Override timezone**: set `CHECKIN_TZ` (IANA name), e.g. `Asia/Tokyo`, `America/Los_Angeles`
+- **Window config file**: `backend/config/checkin_window.json`
+  - `start` (format `HH:MM`, 24-hour)
+  - `end` (format `HH:MM`, 24-hour)
+- **Optional custom config path**: set `CHECKIN_CONFIG_FILE` to point to a JSON file
 
 Example:
 
 ```bash
 export CHECKIN_TZ=Asia/Tokyo
+export CHECKIN_CONFIG_FILE=./config/checkin_window.json
+```
+
+`backend/config/checkin_window.json`:
+
+```json
+{
+  "start": "04:30",
+  "end": "06:00"
+}
 ```
 
 Configure the Zoom meeting URL for the frontend:

@@ -69,7 +69,7 @@ export default function Join() {
             <div className="notice">
               <div className="noticeTitle">Quick heads-up</div>
               <div className="muted">
-                It’s currently outside the <strong>4:30–6:00</strong> check-in
+                It’s currently outside the configured check-in
                 window, so this check-in <strong>won’t count</strong> as a real
                 check-in.
               </div>
