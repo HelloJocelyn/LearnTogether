@@ -1,8 +1,10 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
 import { getCheckinWindowConfig, updateCheckinWindowConfig } from '../api'
+import { useI18n } from '../i18n'
 
 export default function Settings() {
+  const { t } = useI18n()
   const joinUrl = useMemo(() => `${window.location.origin}/join`, [])
   const [start, setStart] = useState('')
   const [end, setEnd] = useState('')
@@ -36,7 +38,7 @@ export default function Settings() {
       setEnd(cfg.end)
       setAppEnv(cfg.app_env)
       setSource(cfg.source)
-      setSaved('Saved check-in window config.')
+      setSaved(t('settings.saved'))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -48,23 +50,23 @@ export default function Settings() {
     <div className="page">
       <main className="main">
         <section className="card">
-          <h2>Settings</h2>
-          <p className="muted">Manage environment-aware check-in window config.</p>
-          {loading ? <p className="muted">Loading check-in config…</p> : null}
+          <h2>{t('settings.title')}</h2>
+          <p className="muted">{t('settings.checkinConfigDesc')}</p>
+          {loading ? <p className="muted">{t('settings.loadingConfig')}</p> : null}
           {!loading ? (
             <form onSubmit={onSaveWindow} className="quickJoinForm" style={{ marginTop: 12 }}>
-              <div className="muted">Environment: {appEnv || 'local'}</div>
-              <div className="muted">Source: {source || '-'}</div>
+              <div className="muted">{t('settings.environment', { value: appEnv || 'local' })}</div>
+              <div className="muted">{t('settings.source', { value: source || '-' })}</div>
               <label className="label">
-                Window start
+                {t('settings.windowStart')}
                 <input type="time" value={start} onChange={(e) => setStart(e.target.value)} required />
               </label>
               <label className="label">
-                Window end
+                {t('settings.windowEnd')}
                 <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} required />
               </label>
               <button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : 'Save check-in window'}
+                {saving ? t('settings.saving') : t('settings.saveWindow')}
               </button>
             </form>
           ) : null}
@@ -74,18 +76,18 @@ export default function Settings() {
 
         <details className="card" open={false}>
           <summary className="shareSummary">
-            <span>Share this site (QR)</span>
-            <span className="muted">collapsed</span>
+            <span>{t('settings.shareTitle')}</span>
+            <span className="muted">{t('settings.collapsed')}</span>
           </summary>
           <div className="shareBody">
             <p className="muted">
-              This QR code is for you to share the join page with others.
+              {t('settings.shareDesc')}
             </p>
             <div className="qrWrap">
               <QRCodeCanvas value={joinUrl} size={220} includeMargin />
             </div>
             <p className="muted">
-              Link: <a href="/join">{joinUrl}</a>
+              {t('settings.link')} <a href="/join">{joinUrl}</a>
             </p>
           </div>
         </details>

@@ -1,8 +1,10 @@
 import { type FormEvent, useEffect, useState } from 'react'
 
 import { createMember, deleteMember, listMembers, type Member } from '../api'
+import { useI18n } from '../i18n'
 
 export default function Members() {
+  const { t } = useI18n()
   const [members, setMembers] = useState<Member[]>([])
   const [newMemberName, setNewMemberName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -20,7 +22,7 @@ export default function Members() {
     if (!name) return
     const parts = name.split(/\s+/).filter(Boolean)
     if (parts.length !== 3) {
-      setError(`Name must be in format: "${formatHint}"`)
+      setError(t('members.nameFormatError', { format: formatHint }))
       return
     }
     setError(null)
@@ -51,25 +53,25 @@ export default function Members() {
     <div className="page">
       <main className="main">
         <section className="card">
-          <h2>Members</h2>
+          <h2>{t('members.title')}</h2>
           <p className="muted">
-            Add frequently used names here, then select them from Home quick check-in.
+            {t('members.desc')}
           </p>
-          <p className="muted">Required format: "{formatHint}"</p>
+          <p className="muted">{t('members.requiredFormat', { format: formatHint })}</p>
           <form onSubmit={onAddMember} className="row">
             <input
               value={newMemberName}
               onChange={(e) => setNewMemberName(e.target.value)}
-              placeholder='Add new member (e.g. "alex student react")'
+              placeholder={t('members.placeholder')}
             />
             <button type="submit" disabled={newMemberName.trim().length === 0}>
-              Add
+              {t('members.add')}
             </button>
           </form>
           {error ? <p className="error">{error}</p> : null}
           {members.length === 0 ? (
             <p className="muted" style={{ marginTop: 10 }}>
-              No members yet.
+              {t('members.none')}
             </p>
           ) : (
             <ul className="list dayList" style={{ marginTop: 10 }}>
@@ -83,7 +85,7 @@ export default function Members() {
                         className="secondary"
                         onClick={() => onDeleteMember(m.id)}
                       >
-                        Remove
+                        {t('members.remove')}
                       </button>
                     </div>
                   </div>

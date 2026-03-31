@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { listCheckins, type CheckIn } from '../api'
+import { useI18n } from '../i18n'
 
 type Tab = 'daily' | 'monthly' | 'yearly'
 
@@ -74,6 +75,7 @@ function avatarFor(nickname: string) {
 }
 
 export default function CheckinAnalytics() {
+  const { t } = useI18n()
   const [tab, setTab] = useState<Tab>('monthly')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -198,23 +200,23 @@ export default function CheckinAnalytics() {
   return (
     <section className="analytics">
       <div className="analyticsTop">
-        <h2 style={{ marginBottom: 0 }}>Check-in Analytics</h2>
+        <h2 style={{ marginBottom: 0 }}>{t('stats.title')}</h2>
         <div className="analyticsControls">
           <div className="tabs">
             <button type="button" className={tab === 'daily' ? 'tabActive' : ''} onClick={() => setTab('daily')}>
-              Daily
+              {t('stats.daily')}
             </button>
             <button type="button" className={tab === 'monthly' ? 'tabActive' : ''} onClick={() => setTab('monthly')}>
-              Monthly
+              {t('stats.monthly')}
             </button>
             <button type="button" className={tab === 'yearly' ? 'tabActive' : ''} onClick={() => setTab('yearly')}>
-              Yearly
+              {t('stats.yearly')}
             </button>
           </div>
 
           <div className="filters">
             <label className="label">
-              Year
+              {t('stats.year')}
               <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
                 {availableYears.map((y) => (
                   <option key={y} value={y}>
@@ -226,7 +228,7 @@ export default function CheckinAnalytics() {
 
             {tab === 'monthly' ? (
               <label className="label">
-                Month
+                {t('stats.month')}
                 <select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(Number(e.target.value))}
@@ -244,7 +246,7 @@ export default function CheckinAnalytics() {
       </div>
 
       {error ? <p className="error">{error}</p> : null}
-      {loading ? <p className="muted">Loading analytics…</p> : null}
+      {loading ? <p className="muted">{t('stats.loading')}</p> : null}
 
       {!loading && !error && tab === 'daily' ? (
         <div className="dailyGrid">
@@ -252,7 +254,7 @@ export default function CheckinAnalytics() {
             <div key={d.dateKey} className="dailyCell">
               <div className="dailyDate">{d.dateKey.slice(5)}</div>
               <div className="dailyCount real">
-                {d.joined} <span className="dailySmall">joins</span>
+                {d.joined} <span className="dailySmall">{t('stats.joins')}</span>
               </div>
             </div>
           ))}
@@ -276,10 +278,10 @@ export default function CheckinAnalytics() {
         <div className="matrixWrap">
           <div className="matrixLegend">
             <span className="legendItem">
-              <span className="legendChip realChip" /> Checked-in
+              <span className="legendChip realChip" /> {t('stats.checkedIn')}
             </span>
             <span className="legendItem">
-              <span className="legendChip emptyChip" /> No check-in
+              <span className="legendChip emptyChip" /> {t('stats.noCheckin')}
             </span>
           </div>
 
@@ -291,7 +293,7 @@ export default function CheckinAnalytics() {
                   gridTemplateColumns: `160px repeat(${monthlyMatrix.days.length}, minmax(0, 1fr))`,
                 }}
               >
-                <div className="matrixUserHeader">Users</div>
+                <div className="matrixUserHeader">{t('stats.users')}</div>
                 {monthlyMatrix.days.map((d) => (
                   <div key={d} className="matrixDayHeader">
                     {d}
@@ -324,7 +326,7 @@ export default function CheckinAnalytics() {
                       const st = userMap?.get(dk)
                       if (!st) {
                         return (
-                          <div key={d} className="cell empty" aria-label="No check-in">
+                          <div key={d} className="cell empty" aria-label={t('stats.noCheckin')}>
                             <span className="cellInner" />
                           </div>
                         )
@@ -333,7 +335,7 @@ export default function CheckinAnalytics() {
                         <div
                           key={d}
                           className="cell real"
-                          title="Checked-in"
+                          title={t('stats.checkedIn')}
                         >
                           <span className="cellInner" />
                         </div>

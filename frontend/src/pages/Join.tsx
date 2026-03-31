@@ -2,12 +2,14 @@ import { type FormEvent, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { createCheckin } from '../api'
+import { useI18n } from '../i18n'
 
 const zoomUrl =
   (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
   'https://zoom.us/join'
 
 export default function Join() {
+  const { t } = useI18n()
   const [nickname, setNickname] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -42,53 +44,49 @@ export default function Join() {
     <div className="page">
       <header className="header">
         <div className="titleRow">
-          <h1 className="title">Join</h1>
-          <span className="tagline">今日も一緒に、一歩ずつ</span>
+          <h1 className="title">{t('join.title')}</h1>
+          <span className="tagline">{t('join.tagline')}</span>
         </div>
         <div className="muted">
-          <Link to="/">Back</Link>
+          <Link to="/">{t('common.back')}</Link>
         </div>
       </header>
 
       <main className="main">
         <section className="card">
-          <h2>Enter nickname</h2>
+          <h2>{t('join.enterNickname')}</h2>
           <form onSubmit={onSubmit} className="row">
             <input
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
-              placeholder="Your nickname"
+              placeholder={t('join.nicknamePlaceholder')}
               autoFocus
             />
             <button type="submit" disabled={!canSubmit}>
-              {submitting ? 'Joining…' : 'Join Zoom'}
+              {submitting ? t('join.joining') : t('join.joinZoom')}
             </button>
           </form>
           {error ? <p className="error">{error}</p> : null}
           {outsideWindow ? (
             <div className="notice">
-              <div className="noticeTitle">Quick heads-up</div>
-              <div className="muted">
-                It’s currently outside the configured check-in
-                window, so this check-in <strong>won’t count</strong> as a real
-                check-in.
-              </div>
+              <div className="noticeTitle">{t('join.quickHeadsUp')}</div>
+              <div className="muted">{t('join.outsideWindowMsg')}</div>
               <div className="row" style={{ marginTop: 12 }}>
                 <button type="button" onClick={() => window.location.assign(zoomUrl)}>
-                  Continue to Zoom
+                  {t('join.continueZoom')}
                 </button>
                 <button
                   type="button"
                   className="secondary"
                   onClick={() => setOutsideWindow(false)}
                 >
-                  Edit nickname
+                  {t('join.editNickname')}
                 </button>
               </div>
             </div>
           ) : null}
           <p className="muted" style={{ marginTop: 10 }}>
-            After saving your nickname, we’ll redirect you to Zoom.
+            {t('join.redirectHint')}
           </p>
         </section>
       </main>

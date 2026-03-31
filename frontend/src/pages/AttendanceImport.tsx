@@ -9,6 +9,7 @@ import {
   type AttendanceStatus,
   updateAttendanceImportItems,
 } from '../api'
+import { useI18n } from '../i18n'
 
 type EditableRow = {
   localId: string
@@ -30,13 +31,17 @@ function toRows(items: AttendanceImportItem[]): EditableRow[] {
   }))
 }
 
-function statusLabel(status: AttendanceStatus) {
-  if (status === 'attended') return 'Attended'
-  if (status === 'not_attended') return 'Not attended'
-  return 'Unknown'
+function statusLabel(
+  status: AttendanceStatus,
+  t: (key: string, vars?: Record<string, string | number>) => string
+) {
+  if (status === 'attended') return t('import.status.attended')
+  if (status === 'not_attended') return t('import.status.notAttended')
+  return t('import.status.unknown')
 }
 
 export default function AttendanceImport() {
+  const { t } = useI18n()
   const [sourceFile, setSourceFile] = useState<File | null>(null)
   const [sourcePreview, setSourcePreview] = useState<string | null>(null)
   const [importInfo, setImportInfo] = useState<AttendanceImport | null>(null)
@@ -115,7 +120,7 @@ export default function AttendanceImport() {
   async function onSaveDraft() {
     if (!importId) return
     if (invalidRows > 0) {
-      setError('Please fill in all names before saving.')
+      setError(t('import.fillNamesSaving'))
       return
     }
     setLoading(true)
@@ -130,7 +135,7 @@ export default function AttendanceImport() {
         }))
       )
       setRows(toRows(updated))
-      setSaveState('Draft saved.')
+      setSaveState(t('import.draftSaved'))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -141,7 +146,7 @@ export default function AttendanceImport() {
   async function onConfirm() {
     if (!importId) return
     if (invalidRows > 0) {
-      setError('Please fill in all names before confirming.')
+      setError(t('import.fillNamesConfirming'))
       return
     }
     setLoading(true)
@@ -160,7 +165,12 @@ export default function AttendanceImport() {
       const result = await confirmAttendanceImport(importId)
       setImportInfo((prev) => (prev ? { ...prev, status: result.status } : prev))
       setSaveState(
-        `Confirmed. Total: ${result.total}, attended: ${result.attended}, not attended: ${result.not_attended}, unknown: ${result.unknown}.`
+        t('import.confirmedSummary', {
+          total: result.total,
+          attended: result.attended,
+          notAttended: result.not_attended,
+          unknown: result.unknown,
+        })
       )
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
@@ -175,19 +185,19 @@ export default function AttendanceImport() {
     <div className="page">
       <header className="header">
         <div className="titleRow">
-          <h1 className="title">Attendance Import</h1>
-          <span className="tagline">Photo → OCR → Review → Save</span>
+          <h1 className="title">{t('import.title')}</h1>
+          <span className="tagline">{t('import.tagline')}</span>
         </div>
         <div className="muted">
-          <Link to="/">Back</Link>
+          <Link to="/">{t('common.back')}</Link>
         </div>
       </header>
 
       <main className="main">
         <section className="card">
-          <h2>1) Upload photo</h2>
+          <h2>{t('import.step1')}</h2>
           <p className="muted">
-            OCR is mocked for now. Upload an image to simulate extracted attendance rows.
+            {t('import.step1Desc')}
           </p>
           <div className="row">
             <input
@@ -197,36 +207,36 @@ export default function AttendanceImport() {
               onChange={(e) => onSelectFile(e.target.files?.[0] ?? null)}
             />
             <button type="button" onClick={onRunMockOcr} disabled={!canUpload}>
-              {loading ? 'Processing…' : 'Run mock OCR'}
+              {loading ? t('import.processing') : t('import.runMock')}
             </button>
           </div>
           {sourcePreview ? (
             <div className="importPreviewWrap">
-              <img src={sourcePreview} alt="Attendance source" className="importPreview" />
+              <img src={sourcePreview} alt={t('import.sourceAlt')} className="importPreview" />
             </div>
           ) : null}
         </section>
 
         <section className="card">
-          <h2>2) Review and adjust</h2>
+          <h2>{t('import.step2')}</h2>
           <div className="importSummary">
-            <span>Total: {summary.total}</span>
-            <span>Attended: {summary.attended}</span>
-            <span>Not attended: {summary.not_attended}</span>
-            <span>Unknown: {summary.unknown}</span>
-            {importInfo ? <span>Status: {importInfo.status}</span> : null}
+            <span>{t('import.total', { count: summary.total })}</span>
+            <span>{t('import.attended', { count: summary.attended })}</span>
+            <span>{t('import.notAttended', { count: summary.not_attended })}</span>
+            <span>{t('import.unknown', { count: summary.unknown })}</span>
+            {importInfo ? <span>{t('import.status', { status: importInfo.status })}</span> : null}
           </div>
           {rows.length === 0 ? (
-            <p className="muted">No OCR rows yet. Upload a photo and run OCR first.</p>
+            <p className="muted">{t('import.noRows')}</p>
           ) : (
             <div className="importTableWrap">
               <table className="importTable">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Status</th>
-                    <th>Confidence</th>
-                    <th>Edited</th>
+                    <th>{t('import.col.name')}</th>
+                    <th>{t('import.col.status')}</th>
+                    <th>{t('import.col.confidence')}</th>
+                    <th>{t('import.col.edited')}</th>
                     <th />
                   </tr>
                 </thead>
@@ -250,13 +260,13 @@ export default function AttendanceImport() {
                           }
                           disabled={disableEdit}
                         >
-                          <option value="attended">{statusLabel('attended')}</option>
-                          <option value="not_attended">{statusLabel('not_attended')}</option>
-                          <option value="unknown">{statusLabel('unknown')}</option>
+                          <option value="attended">{statusLabel('attended', t)}</option>
+                          <option value="not_attended">{statusLabel('not_attended', t)}</option>
+                          <option value="unknown">{statusLabel('unknown', t)}</option>
                         </select>
                       </td>
                       <td>{typeof row.confidence === 'number' ? `${row.confidence}%` : '-'}</td>
-                      <td>{row.is_edited ? 'Yes' : 'No'}</td>
+                      <td>{row.is_edited ? t('import.yes') : t('import.no')}</td>
                       <td>
                         <button
                           type="button"
@@ -264,7 +274,7 @@ export default function AttendanceImport() {
                           onClick={() => removeRow(row.localId)}
                           disabled={disableEdit}
                         >
-                          Delete
+                          {t('import.delete')}
                         </button>
                       </td>
                     </tr>
@@ -275,24 +285,24 @@ export default function AttendanceImport() {
           )}
           <div className="row">
             <button type="button" className="secondary" onClick={addRow} disabled={disableEdit}>
-              Add row
+              {t('import.addRow')}
             </button>
             <button
               type="button"
               onClick={onSaveDraft}
               disabled={loading || rows.length === 0 || disableEdit}
             >
-              Save draft
+              {t('import.saveDraft')}
             </button>
             <button
               type="button"
               onClick={onConfirm}
               disabled={loading || rows.length === 0 || disableEdit}
             >
-              Confirm and store
+              {t('import.confirmStore')}
             </button>
           </div>
-          {invalidRows > 0 ? <p className="error">{invalidRows} row(s) have empty names.</p> : null}
+          {invalidRows > 0 ? <p className="error">{t('import.invalidRows', { count: invalidRows })}</p> : null}
           {error ? <p className="error">{error}</p> : null}
           {saveState ? <p className="muted">{saveState}</p> : null}
         </section>

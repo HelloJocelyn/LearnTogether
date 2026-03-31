@@ -8,6 +8,7 @@ import {
   type CheckIn,
   type Member,
 } from '../api'
+import { useI18n } from '../i18n'
 
 const zoomUrl =
   (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
@@ -68,7 +69,19 @@ function avatarFor(nickname: string) {
   return { initials, bg }
 }
 
+function splitMemberLabel(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 3) {
+    return {
+      title: parts[0]!,
+      subtitle: `${parts[1]!} ${parts.slice(2).join(' ')}`.trim(),
+    }
+  }
+  return { title: name.trim(), subtitle: '' }
+}
+
 export default function Home() {
+  const { t } = useI18n()
   const [checkins, setCheckins] = useState<CheckIn[]>([])
   const [error, setError] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
@@ -126,7 +139,7 @@ export default function Home() {
     if (!selectedName) {
       const parts = fallback.split(/\s+/).filter(Boolean)
       if (parts.length !== 3) {
-        setJoinError(`Name must be in format: "${memberFormatHint}"`)
+        setJoinError(t('home.nameFormatError', { format: memberFormatHint }))
         return
       }
     }
@@ -177,10 +190,10 @@ export default function Home() {
       <main className="main">
         <div className="topPanel">
           <section className="card quickJoinSquare">
-            <h2>Daily Check-In</h2>
+            <h2>🗓️ {t('home.dailyCheckin')}</h2>
             <form onSubmit={onQuickJoin} className="quickJoinForm">
-              <div className="muted">Enter your name to check in:</div>
-              <div className="muted">Required format: "{memberFormatHint}"</div>
+              <div className="muted">{t('home.enterName')}</div>
+              <div className="muted">{t('home.requiredFormat', { format: memberFormatHint })}</div>
               <select
                 value={selectedMemberId}
                 onChange={(e) =>
@@ -188,7 +201,7 @@ export default function Home() {
                 }
               >
                 <option value="">
-                  {members.length > 0 ? 'Choose saved name' : 'No saved names yet'}
+                  {members.length > 0 ? t('home.chooseSaved') : t('home.noSaved')}
                 </option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -200,31 +213,28 @@ export default function Home() {
                 <input
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
-                  placeholder='Enter name (e.g. "alex student react")'
+                  placeholder={t('home.inputPlaceholder')}
                 />
               </div>
               <button type="submit" disabled={!canJoin} className="checkinCta">
-                {joining ? 'Joining…' : 'Join Zoom'}
+                {joining ? t('home.joining') : t('home.joinZoom')}
               </button>
             </form>
             {joinError ? <p className="error">{joinError}</p> : null}
             {outsideWindow ? (
               <div className="notice">
-                <div className="noticeTitle">Quick heads-up</div>
-                <div className="muted">
-                  It’s currently outside the configured check-in window,
-                  so this check-in <strong>won’t count</strong> as a real check-in.
-                </div>
+                <div className="noticeTitle">{t('home.quickHeadsUp')}</div>
+                <div className="muted">{t('home.outsideWindowMsg')}</div>
                 <div className="row" style={{ marginTop: 12 }}>
                   <button type="button" onClick={() => window.location.assign(zoomUrl)}>
-                    Continue to Zoom
+                    {t('home.continueZoom')}
                   </button>
                   <button
                     type="button"
                     className="secondary"
                     onClick={() => setOutsideWindow(false)}
                   >
-                    Stay here
+                    {t('home.stayHere')}
                   </button>
                 </div>
               </div>
@@ -234,13 +244,13 @@ export default function Home() {
           <section className="card keepUpCard">
             <div className="keepUpInner">
               <div>
-                <h2>Keep it up</h2>
-                <div className="muted">Today Joined: {todayJoined} Members</div>
-                <div className="muted">Date ({displayTz}): {currentZoneDate}</div>
+                <h2>🐱 {t('home.keepItUp')}</h2>
+                <div className="muted">{t('home.todayJoinedMembers', { count: todayJoined })}</div>
+                <div className="muted">{t('home.dateWithTz', { tz: displayTz, date: currentZoneDate })}</div>
               </div>
               <img
                 src="/cat.png"
-                alt="Study cat"
+                alt={t('home.studyCatAlt')}
                 className="keepUpCat"
                 onError={(e) => {
                   ;(e.currentTarget as HTMLImageElement).style.display = 'none'
@@ -252,29 +262,31 @@ export default function Home() {
 
         <section className="card">
           <div className="rowTop">
-            <h2 style={{ marginBottom: 0 }}>Today's joins</h2>
-            <span className="muted">{todaysJoins.length} joins</span>
+            <h2 style={{ marginBottom: 0 }}>{t('home.todaysJoins')}</h2>
+            <span className="muted">{t('home.joinsCount', { count: todaysJoins.length })}</span>
           </div>
           {error ? <p className="error">{error}</p> : null}
-          <ul className="list dayList" style={{ marginTop: 12 }}>
+          <ul className="list dayList joinsGrid" style={{ marginTop: 12 }}>
             {todaysJoins.length === 0 ? (
-              <li className="emptyRow muted">No check-ins yet for today.</li>
+              <li className="emptyRow muted">{t('home.noCheckinsToday')}</li>
             ) : (
               todaysJoins.map((c) => {
                 const av = avatarFor(c.nickname)
+                const meta = splitMemberLabel(c.nickname)
                 return (
-                  <li key={c.id} className="rowItem">
+                  <li key={c.id} className="rowItem joinTile">
                     <span className="avatar" style={{ background: av.bg }} aria-hidden="true">
                       {av.initials}
                     </span>
                     <div className="rowText">
                       <div className="rowTop">
-                        <strong>{c.nickname}</strong>
-                        {/* <span className={`pill ${c.is_real ? 'real' : 'outsidePill'}`}>
-                          {c.is_real ? 'Real check-in' : 'Outside configured window'}
-                        </span> */}
+                        <strong>{meta.title}</strong>
                       </div>
+                      {meta.subtitle ? <div className="muted">{meta.subtitle}</div> : null}
                     </div>
+                    <span className="joinArrow" aria-hidden="true">
+                      ›
+                    </span>
                   </li>
                 )
               })
@@ -285,9 +297,9 @@ export default function Home() {
         {todaysOutside.length > 0 ? (
           <section className="card">
             <div className="daySummary outsideLogSummary" style={{ cursor: 'default' }}>
-              <span className="dayTitle">Outside window log</span>
+              <span className="dayTitle">{t('home.outsideWindowLog')}</span>
               <span className="dayCount muted">
-                {todaysOutside.length} outside check-ins
+                {t('home.outsideCheckinsCount', { count: todaysOutside.length })}
               </span>
             </div>
 
@@ -295,7 +307,7 @@ export default function Home() {
               <div className="day" style={{ background: 'transparent' }}>
                 <div className="daySummary" style={{ cursor: 'default' }}>
                   <span className="dayTitle">{serverTodayKey}</span>
-                  <span className="dayCount muted">{todaysOutside.length} outside</span>
+                  <span className="dayCount muted">{t('home.outsideShortCount', { count: todaysOutside.length })}</span>
                 </div>
                 <ul className="list dayList outside" style={{ marginTop: 0 }}>
                   {todaysOutside.map((c) => {
@@ -309,7 +321,7 @@ export default function Home() {
                           <div className="rowTop">
                             <strong>{c.nickname}</strong>
                             <span className="pill outsidePill">
-                              Outside configured window
+                              {t('home.outsideWindowBadge')}
                             </span>
                           </div>
                           <div className="muted">{formatDateTime(c.created_at)}</div>
