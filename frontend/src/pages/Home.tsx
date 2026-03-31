@@ -16,35 +16,6 @@ const zoomUrl =
 
 const displayTz = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
 
-function formatDateTime(iso: string) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return new Intl.DateTimeFormat(undefined, {
-    timeZone: displayTz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(d)
-}
-
-function toLocalDateKey(iso: string) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return 'Unknown date'
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: displayTz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(d)
-  const yyyy = parts.find((p) => p.type === 'year')?.value ?? '0000'
-  const mm = parts.find((p) => p.type === 'month')?.value ?? '00'
-  const dd = parts.find((p) => p.type === 'day')?.value ?? '00'
-  return `${yyyy}-${mm}-${dd}`
-}
-
 function hashString(input: string) {
   let hash = 0
   for (let i = 0; i < input.length; i++) {
@@ -96,7 +67,6 @@ export default function Home() {
       ? members.find((m) => m.id === selectedMemberId)?.name ?? ''
       : ''
   const canJoin = !joining && (selectedName.trim().length > 0 || nickname.trim().length > 0)
-  const todayKey = useMemo(() => toLocalDateKey(new Date().toISOString()), [])
   const currentZoneDate = useMemo(
     () =>
       new Intl.DateTimeFormat('en-CA', {
@@ -107,10 +77,6 @@ export default function Home() {
       }).format(new Date()),
     []
   )
-  const serverTodayKey = useMemo(() => {
-    if (checkins.length === 0) return todayKey
-    return toLocalDateKey(checkins[0]!.created_at)
-  }, [checkins, todayKey])
   const todayJoined = useMemo(() => {
     const names = new Set(checkins.map((c) => c.nickname.trim()))
     return names.size
@@ -180,10 +146,6 @@ export default function Home() {
   const todaysJoins = useMemo(() => {
     return [...checkins].sort((a, b) => (a.id === b.id ? 0 : a.id > b.id ? -1 : 1))
   }, [checkins])
-
-  const todaysOutside = useMemo(() => {
-    return todaysJoins.filter((c) => !c.is_real)
-  }, [todaysJoins])
 
   return (
     <div className="page">
@@ -294,46 +256,6 @@ export default function Home() {
           </ul>
         </section>
 
-        {todaysOutside.length > 0 ? (
-          <section className="card">
-            <div className="daySummary outsideLogSummary" style={{ cursor: 'default' }}>
-              <span className="dayTitle">{t('home.outsideWindowLog')}</span>
-              <span className="dayCount muted">
-                {t('home.outsideCheckinsCount', { count: todaysOutside.length })}
-              </span>
-            </div>
-
-            <div className="history outsideLogBody" style={{ marginTop: 10 }}>
-              <div className="day" style={{ background: 'transparent' }}>
-                <div className="daySummary" style={{ cursor: 'default' }}>
-                  <span className="dayTitle">{serverTodayKey}</span>
-                  <span className="dayCount muted">{t('home.outsideShortCount', { count: todaysOutside.length })}</span>
-                </div>
-                <ul className="list dayList outside" style={{ marginTop: 0 }}>
-                  {todaysOutside.map((c) => {
-                    const av = avatarFor(c.nickname)
-                    return (
-                      <li key={c.id} className="rowItem outsideRow">
-                        <span className="avatar avatarGrey" aria-hidden="true">
-                          {av.initials}
-                        </span>
-                        <div className="rowText">
-                          <div className="rowTop">
-                            <strong>{c.nickname}</strong>
-                            <span className="pill outsidePill">
-                              {t('home.outsideWindowBadge')}
-                            </span>
-                          </div>
-                          <div className="muted">{formatDateTime(c.created_at)}</div>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </div>
-            </div>
-          </section>
-        ) : null}
       </main>
     </div>
   )
