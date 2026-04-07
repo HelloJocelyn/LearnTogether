@@ -55,3 +55,15 @@ class Member(Base):
   name: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
   is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+
+class DailyHero(Base):
+  __tablename__ = "daily_heroes"
+
+  id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+  hero_date_local: Mapped[str] = mapped_column(String(10), nullable=False, unique=True, index=True)
+  theme: Mapped[str] = mapped_column(String(200), nullable=False)
+  title: Mapped[str] = mapped_column(String(200), nullable=False)
+  subtitle: Mapped[str] = mapped_column(String(400), nullable=False)
+  image_filename: Mapped[str] = mapped_column(String(80), nullable=False)
+  created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+

@@ -1,6 +1,10 @@
 const rawBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? ''
 const base = rawBase.replace(/\/+$/, '')
 
+export function apiBaseUrl(): string {
+  return base
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
   const res = await fetch(`${base}${path}`, {
@@ -63,6 +67,14 @@ export type CheckinWindowConfig = {
   end: string
   app_env: string
   source: string
+}
+
+export type DailyHero = {
+  date: string
+  theme?: string | null
+  title?: string | null
+  subtitle?: string | null
+  image_url?: string | null
 }
 
 export function getHealth() {
@@ -153,5 +165,9 @@ export function updateCheckinWindowConfig(start: string, end: string) {
     method: 'PUT',
     body: JSON.stringify({ start, end }),
   })
+}
+
+export function getDailyHero() {
+  return request<DailyHero>('/api/daily-hero')
 }
 

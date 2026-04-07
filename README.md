@@ -75,6 +75,12 @@ Backend marks a check-in as **real** only if it happens within the configured ti
   - `end` (format `HH:MM`, 24-hour)
 - **Environment selector**: set `APP_ENV` to `local` or `production` (default: `local`)
 
+### Daily hero image (OpenAI, optional)
+
+If `OPENAI_API_KEY` is set, the backend generates one calm study-themed wide illustration per calendar day (using `CHECKIN_TZ`), caches the PNG under `backend/data/daily_hero/`, and the Home page shows it instead of the cat. Without the key, the cat image remains.
+
+Optional: `OPENAI_IMAGE_MODEL` (e.g. `gpt-image-1` or `dall-e-3`), `OPENAI_CHAT_MODEL` (default `gpt-4o-mini`), `DAILY_HERO_DIR` (override storage path).
+
 Example:
 
 ```bash
@@ -108,8 +114,11 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env   # optional; edit .env for OPENAI_API_KEY, CHECKIN_TZ, etc.
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+The backend loads environment variables from `backend/.env` (see `backend/.env.example`). `backend/.env` is gitignored.
 
 ### Frontend
 

@@ -1,11 +1,14 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 
 import {
+  apiBaseUrl,
   createCheckin,
   createMember,
+  getDailyHero,
   listCheckins,
   listMembers,
   type CheckIn,
+  type DailyHero,
   type Member,
 } from '../api'
 import { useI18n } from '../i18n'
@@ -51,6 +54,15 @@ function splitMemberLabel(name: string) {
   return { title: name.trim(), subtitle: '' }
 }
 
+function resolveHeroImageSrc(hero: DailyHero | null): string {
+  const raw = hero?.image_url?.trim()
+  if (!raw) return '/cat.png'
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw
+  const prefix = apiBaseUrl()
+  const path = raw.startsWith('/') ? raw : `/${raw}`
+  return prefix ? `${prefix}${path}` : path
+}
+
 export default function Home() {
   const { t } = useI18n()
   const [checkins, setCheckins] = useState<CheckIn[]>([])
@@ -61,6 +73,8 @@ export default function Home() {
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
   const [outsideWindow, setOutsideWindow] = useState(false)
+  const [dailyHero, setDailyHero] = useState<DailyHero | null>(null)
+  const [heroImgFailed, setHeroImgFailed] = useState(false)
   const memberFormatHint = 'nickname role goal'
   const selectedName =
     typeof selectedMemberId === 'number'
@@ -90,7 +104,15 @@ export default function Home() {
     listMembers()
       .then(setMembers)
       .catch((e: unknown) => console.error(e))
+
+    getDailyHero()
+      .then(setDailyHero)
+      .catch((e: unknown) => console.error(e))
   }, [])
+
+  useEffect(() => {
+    setHeroImgFailed(false)
+  }, [dailyHero?.image_url])
 
   async function refresh() {
     const data = await listCheckins(500, false, { todayOnly: true })
@@ -210,14 +232,34 @@ export default function Home() {
                 <div className="muted">{t('home.todayJoinedMembers', { count: todayJoined })}</div>
                 <div className="muted">{t('home.dateWithTz', { tz: displayTz, date: currentZoneDate })}</div>
               </div>
-              <img
-                src="/cat.png"
-                alt={t('home.studyCatAlt')}
-                className="keepUpCat"
-                onError={(e) => {
-                  ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                }}
-              />
+              <div className="keepUpHeroVisual">
+                <img
+                  src={resolveHeroImageSrc(dailyHero)}
+                  alt={dailyHero?.image_url ? t('home.dailyHeroAlt') : t('home.studyCatAlt')}
+                  className={
+                    dailyHero?.image_url && !heroImgFailed ? 'keepUpHeroImg' : 'keepUpCat'
+                  }
+                  onError={(e) => {
+                    const el = e.currentTarget as HTMLImageElement
+                    if (el.src.includes('/cat.png')) {
+                      el.style.display = 'none'
+                      return
+                    }
+                    setHeroImgFailed(true)
+                    el.src = '/cat.png'
+                    el.alt = t('home.studyCatAlt')
+                    el.className = 'keepUpCat'
+                  }}
+                />
+                {dailyHero?.image_url && !heroImgFailed && (dailyHero.title || dailyHero.subtitle) ? (
+                  <div className="keepUpHeroOverlay">
+                    {dailyHero.title ? <div className="keepUpHeroTitle">{dailyHero.title}</div> : null}
+                    {dailyHero.subtitle ? (
+                      <div className="keepUpHeroSubtitle">{dailyHero.subtitle}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </section>
         </div>

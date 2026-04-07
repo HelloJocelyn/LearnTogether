@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from . import crud, schemas
@@ -14,6 +15,7 @@ from .checkin_config import (
   resolve_checkin_config_path,
   save_checkin_window_config,
 )
+from .daily_hero_service import get_daily_hero_response, get_today_hero_image_path
 from .db import get_db, init_db
 
 
@@ -38,6 +40,19 @@ def _on_startup() -> None:
 @app.get("/api/health")
 def health():
   return {"ok": True}
+
+
+@app.get("/api/daily-hero", response_model=schemas.DailyHeroOut)
+def get_daily_hero(db: Session = Depends(get_db)):
+  return get_daily_hero_response(db)
+
+
+@app.get("/api/daily-hero/image")
+def get_daily_hero_image(db: Session = Depends(get_db)):
+  path = get_today_hero_image_path(db)
+  if path is None:
+    raise HTTPException(status_code=404, detail="daily hero image not available")
+  return FileResponse(path, media_type="image/png")
 
 
 @app.get("/api/items", response_model=list[schemas.ItemOut])

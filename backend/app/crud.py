@@ -7,7 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import and_
 
-from .models import AttendanceImport, AttendanceImportItem, CheckIn, Item, Member
+from .models import AttendanceImport, AttendanceImportItem, CheckIn, DailyHero, Item, Member
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -344,5 +344,38 @@ def deactivate_member(db: Session, *, member_id: int) -> None:
   if member is None:
     return
   member.is_active = False
+  db.commit()
+
+
+def get_daily_hero_by_date(db: Session, *, hero_date_local: str) -> Optional[DailyHero]:
+  return db.scalar(select(DailyHero).where(DailyHero.hero_date_local == hero_date_local))
+
+
+def create_daily_hero(
+  db: Session,
+  *,
+  hero_date_local: str,
+  theme: str,
+  title: str,
+  subtitle: str,
+  image_filename: str,
+  created_at: datetime,
+) -> DailyHero:
+  row = DailyHero(
+    hero_date_local=hero_date_local,
+    theme=theme,
+    title=title,
+    subtitle=subtitle,
+    image_filename=image_filename,
+    created_at=created_at,
+  )
+  db.add(row)
+  db.commit()
+  db.refresh(row)
+  return row
+
+
+def delete_daily_hero(db: Session, *, row: DailyHero) -> None:
+  db.delete(row)
   db.commit()
 

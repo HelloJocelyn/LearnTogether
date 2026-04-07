@@ -101,3 +101,11 @@ class CheckinWindowConfigOut(CheckinWindowConfig):
   app_env: str
   source: str
 
+
+class DailyHeroOut(BaseModel):
+  date: str
+  theme: Optional[str] = None
+  title: Optional[str] = None
+  subtitle: Optional[str] = None
+  image_url: Optional[str] = None
+
