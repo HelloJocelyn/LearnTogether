@@ -73,6 +73,7 @@ export default function Home() {
   const [joining, setJoining] = useState(false)
   const [joinError, setJoinError] = useState<string | null>(null)
   const [outsideWindow, setOutsideWindow] = useState(false)
+  const [lastCheckinStatus, setLastCheckinStatus] = useState<CheckIn['status'] | null>(null)
   const [dailyHero, setDailyHero] = useState<DailyHero | null>(null)
   const [heroImgFailed, setHeroImgFailed] = useState(false)
   const memberFormatHint = 'nickname role goal'
@@ -151,12 +152,32 @@ export default function Home() {
 
       const result = await createCheckin(name)
       await refresh()
+      setLastCheckinStatus(result.status)
 
       if (result.is_real) {
         window.location.assign(zoomUrl)
         return
       }
 
+      setOutsideWindow(true)
+      setJoining(false)
+    } catch (err: unknown) {
+      setJoinError(err instanceof Error ? err.message : String(err))
+      setJoining(false)
+    }
+  }
+
+  async function onApplyLeave() {
+    const fallback = nickname.trim()
+    const name = selectedName || fallback
+    if (!name) return
+    setJoinError(null)
+    setOutsideWindow(false)
+    setJoining(true)
+    try {
+      const result = await createCheckin(name, 'leave')
+      await refresh()
+      setLastCheckinStatus(result.status)
       setOutsideWindow(true)
       setJoining(false)
     } catch (err: unknown) {
@@ -203,12 +224,19 @@ export default function Home() {
               <button type="submit" disabled={!canJoin} className="checkinCta">
                 {joining ? t('home.joining') : t('home.joinZoom')}
               </button>
+              <button type="button" className="secondary" disabled={!canJoin || joining} onClick={onApplyLeave}>
+                {t('home.applyLeave')}
+              </button>
             </form>
             {joinError ? <p className="error">{joinError}</p> : null}
             {outsideWindow ? (
               <div className="notice">
                 <div className="noticeTitle">{t('home.quickHeadsUp')}</div>
-                <div className="muted">{t('home.outsideWindowMsg')}</div>
+                <div className="muted">
+                  {lastCheckinStatus === 'leave'
+                    ? t('home.leaveSubmittedMsg')
+                    : t('home.outsideWindowMsg')}
+                </div>
                 <div className="row" style={{ marginTop: 12 }}>
                   <button type="button" onClick={() => window.location.assign(zoomUrl)}>
                     {t('home.continueZoom')}
@@ -285,6 +313,9 @@ export default function Home() {
                     <div className="rowText">
                       <div className="rowTop">
                         <strong>{meta.title}</strong>
+                        <span className={`pill statusPill statusPill-${c.status}`}>
+                          {t(`home.status.${c.status}`)}
+                        </span>
                       </div>
                       {meta.subtitle ? <div className="muted">{meta.subtitle}</div> : null}
                     </div>

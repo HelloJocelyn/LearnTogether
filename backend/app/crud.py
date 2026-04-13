@@ -27,14 +27,24 @@ def _parse_hhmm(raw: Optional[str], fallback: time) -> time:
   return fallback
 
 
-def _is_real_checkin(
-  *, now: datetime, tz_name: Optional[str], window_start: Optional[str], window_end: Optional[str]
-) -> bool:
+def _classify_checkin_status(
+  *,
+  now: datetime,
+  tz_name: Optional[str],
+  normal_start: Optional[str],
+  normal_end: Optional[str],
+  late_end: Optional[str],
+) -> str:
   local = now.astimezone(ZoneInfo(tz_name)) if tz_name else now.astimezone()
   t = local.timetz().replace(tzinfo=None)
-  start = _parse_hhmm(window_start, time(4, 30))
-  end = _parse_hhmm(window_end, time(6, 0))
-  return start <= t <= end
+  start = _parse_hhmm(normal_start, time(4, 30))
+  normal_cutoff = _parse_hhmm(normal_end, time(5, 30))
+  late_cutoff = _parse_hhmm(late_end, time(8, 0))
+  if start <= t < normal_cutoff:
+    return "normal"
+  if normal_cutoff <= t <= late_cutoff:
+    return "late"
+  return "outside"
 
 
 def list_items(db: Session) -> list[Item]:
@@ -135,9 +145,11 @@ def create_checkin(
   db: Session,
   *,
   nickname: str,
+  requested_status: Optional[str] = None,
   tz_name: Optional[str] = None,
-  window_start: Optional[str] = None,
-  window_end: Optional[str] = None,
+  normal_start: Optional[str] = None,
+  normal_end: Optional[str] = None,
+  late_end: Optional[str] = None,
 ) -> CheckIn:
   now = datetime.now(timezone.utc)
 
@@ -160,25 +172,37 @@ def create_checkin(
   )
   if existing:
     earliest = existing[0]
-    refreshed_is_real = _is_real_checkin(
+    refreshed_status = _classify_checkin_status(
       now=earliest.created_at,
       tz_name=tz_name,
-      window_start=window_start,
-      window_end=window_end,
+      normal_start=normal_start,
+      normal_end=normal_end,
+      late_end=late_end,
     )
-    if earliest.is_real != refreshed_is_real:
-      earliest.is_real = refreshed_is_real
+    if earliest.status != "leave" and earliest.status != refreshed_status:
+      earliest.status = refreshed_status
+      earliest.is_real = refreshed_status in {"normal", "late"}
       db.commit()
       db.refresh(earliest)
     return earliest
 
+  status = (
+    "leave"
+    if requested_status == "leave"
+    else _classify_checkin_status(
+      now=now,
+      tz_name=tz_name,
+      normal_start=normal_start,
+      normal_end=normal_end,
+      late_end=late_end,
+    )
+  )
   checkin = CheckIn(
     created_at=now,
     nickname=nickname,
     checkin_date_local=local_date_text,
-    is_real=_is_real_checkin(
-      now=now, tz_name=tz_name, window_start=window_start, window_end=window_end
-    ),
+    status=status,
+    is_real=status in {"normal", "late"},
   )
   db.add(checkin)
   db.commit()

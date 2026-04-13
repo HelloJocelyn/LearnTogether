@@ -142,9 +142,11 @@ def create_checkin(payload: schemas.CheckInCreate, db: Session = Depends(get_db)
   return crud.create_checkin(
     db,
     nickname=nickname,
+    requested_status="leave" if payload.status == "leave" else None,
     tz_name=tz_name,
-    window_start=window["start"],
-    window_end=window["end"],
+    normal_start=window["normal_start"],
+    normal_end=window["normal_end"],
+    late_end=window["late_end"],
   )
 
 
@@ -177,7 +179,11 @@ def get_checkin_window_config():
 @app.put("/api/settings/checkin-window", response_model=schemas.CheckinWindowConfigOut)
 def update_checkin_window_config(payload: schemas.CheckinWindowConfig):
   try:
-    saved = save_checkin_window_config(start=payload.start, end=payload.end)
+    saved = save_checkin_window_config(
+      normal_start=payload.normal_start,
+      normal_end=payload.normal_end,
+      late_end=payload.late_end,
+    )
   except ValueError as exc:
     raise HTTPException(status_code=400, detail=str(exc)) from exc
   app_env = os.getenv("APP_ENV", "local").strip().lower() or "local"

@@ -17,6 +17,7 @@ class ItemOut(BaseModel):
 
 class CheckInCreate(BaseModel):
   nickname: str
+  status: Optional[Literal["normal", "late", "leave", "outside"]] = None
 
 
 class CheckInOut(BaseModel):
@@ -26,6 +27,7 @@ class CheckInOut(BaseModel):
   created_at: datetime
   nickname: str
   is_real: bool
+  status: Literal["normal", "late", "leave", "outside"]
   checkin_date_local: Optional[str] = None
 
 
@@ -93,8 +95,9 @@ class MemberOut(BaseModel):
 
 
 class CheckinWindowConfig(BaseModel):
-  start: str = Field(pattern=r"^\d{2}:\d{2}$")
-  end: str = Field(pattern=r"^\d{2}:\d{2}$")
+  normal_start: str = Field(pattern=r"^\d{2}:\d{2}$")
+  normal_end: str = Field(pattern=r"^\d{2}:\d{2}$")
+  late_end: str = Field(pattern=r"^\d{2}:\d{2}$")
 
 
 class CheckinWindowConfigOut(CheckinWindowConfig):

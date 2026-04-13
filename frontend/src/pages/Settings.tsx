@@ -46,8 +46,9 @@ function avatarFor(nickname: string) {
 export default function Settings() {
   const { t } = useI18n()
   const joinUrl = useMemo(() => `${window.location.origin}/join`, [])
-  const [start, setStart] = useState('')
-  const [end, setEnd] = useState('')
+  const [normalStart, setNormalStart] = useState('')
+  const [normalEnd, setNormalEnd] = useState('')
+  const [lateEnd, setLateEnd] = useState('')
   const [appEnv, setAppEnv] = useState('')
   const [source, setSource] = useState('')
   const [loading, setLoading] = useState(true)
@@ -59,8 +60,9 @@ export default function Settings() {
   useEffect(() => {
     Promise.all([getCheckinWindowConfig(), listCheckins(500, false, { todayOnly: true })])
       .then(([cfg, checkins]) => {
-        setStart(cfg.start)
-        setEnd(cfg.end)
+        setNormalStart(cfg.normal_start)
+        setNormalEnd(cfg.normal_end)
+        setLateEnd(cfg.late_end)
         setAppEnv(cfg.app_env)
         setSource(cfg.source)
         setOutsideRows(checkins.filter((c) => !c.is_real))
@@ -75,9 +77,10 @@ export default function Settings() {
     setError(null)
     setSaved(null)
     try {
-      const cfg = await updateCheckinWindowConfig(start, end)
-      setStart(cfg.start)
-      setEnd(cfg.end)
+      const cfg = await updateCheckinWindowConfig(normalStart, normalEnd, lateEnd)
+      setNormalStart(cfg.normal_start)
+      setNormalEnd(cfg.normal_end)
+      setLateEnd(cfg.late_end)
       setAppEnv(cfg.app_env)
       setSource(cfg.source)
       setSaved(t('settings.saved'))
@@ -101,11 +104,25 @@ export default function Settings() {
               <div className="muted">{t('settings.source', { value: source || '-' })}</div>
               <label className="label">
                 {t('settings.windowStart')}
-                <input type="time" value={start} onChange={(e) => setStart(e.target.value)} required />
+                <input
+                  type="time"
+                  value={normalStart}
+                  onChange={(e) => setNormalStart(e.target.value)}
+                  required
+                />
               </label>
               <label className="label">
-                {t('settings.windowEnd')}
-                <input type="time" value={end} onChange={(e) => setEnd(e.target.value)} required />
+                {t('settings.normalEnd')}
+                <input
+                  type="time"
+                  value={normalEnd}
+                  onChange={(e) => setNormalEnd(e.target.value)}
+                  required
+                />
+              </label>
+              <label className="label">
+                {t('settings.lateEnd')}
+                <input type="time" value={lateEnd} onChange={(e) => setLateEnd(e.target.value)} required />
               </label>
               <button type="submit" disabled={saving}>
                 {saving ? t('settings.saving') : t('settings.saveWindow')}
@@ -154,7 +171,9 @@ export default function Settings() {
                       <div className="rowText">
                         <div className="rowTop">
                           <strong>{c.nickname}</strong>
-                          <span className="pill outsidePill">{t('home.outsideWindowBadge')}</span>
+                          <span className={`pill statusPill statusPill-${c.status}`}>
+                            {t(`home.status.${c.status}`)}
+                          </span>
                         </div>
                         <div className="muted">{formatDateTime(c.created_at)}</div>
                       </div>

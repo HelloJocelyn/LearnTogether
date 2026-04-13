@@ -1,4 +1,5 @@
 {
-  "start": "03:10",
-  "end": "23:40"
+  "normal_start": "03:10",
+  "normal_end": "05:30",
+  "late_end": "23:40"
 }

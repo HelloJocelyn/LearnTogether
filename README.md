@@ -63,16 +63,23 @@ It will pull latest code, rebuild frontend, refresh backend dependencies, and re
 
 ## Check-in time window (real check-ins)
 
-Backend marks a check-in as **real** only if it happens within the configured time window (inclusive), in the configured timezone.
+Backend classifies each check-in into:
+- `normal`: between `normal_start` and `normal_end` (start inclusive, end exclusive)
+- `late`: between `normal_end` and `late_end` (inclusive)
+- `leave`: explicit leave application from UI
+- `outside`: outside configured windows
 
-- **This project default**: timezone `Asia/Tokyo`, window `04:30` to `06:00`
+`normal` and `late` are treated as real check-ins.
+
+- **This project default**: timezone `Asia/Tokyo`, normal `04:30`-`05:30`, late until `08:00`
 - **Override timezone**: set `CHECKIN_TZ` (IANA name), e.g. `Asia/Tokyo`, `America/Los_Angeles`
 - **Environment-based defaults**:
   - local: `backend/config/checkin_window.local.json` (near 24h)
   - production: `backend/config/checkin_window.production.json` (`04:30` - `08:00`)
 - **Window config file (explicit override)**: set `CHECKIN_CONFIG_FILE` to point to a JSON file
-  - `start` (format `HH:MM`, 24-hour)
-  - `end` (format `HH:MM`, 24-hour)
+  - `normal_start` (format `HH:MM`, 24-hour)
+  - `normal_end` (format `HH:MM`, 24-hour)
+  - `late_end` (format `HH:MM`, 24-hour)
 - **Environment selector**: set `APP_ENV` to `local` or `production` (default: `local`)
 
 ### Daily hero image (OpenAI, optional)
@@ -93,8 +100,9 @@ export CHECKIN_CONFIG_FILE=./config/checkin_window.local.json
 
 ```json
 {
-  "start": "00:10",
-  "end": "23:30"
+  "normal_start": "00:10",
+  "normal_end": "05:30",
+  "late_end": "23:30"
 }
 ```
 

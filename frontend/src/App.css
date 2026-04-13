@@ -520,6 +520,30 @@ button.secondary {
   opacity: 0.95;
 }
 
+.statusPill {
+  opacity: 0.95;
+}
+
+.statusPill-normal {
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.statusPill-late {
+  border-color: rgba(245, 158, 11, 0.55);
+  background: rgba(245, 158, 11, 0.14);
+}
+
+.statusPill-leave {
+  border-color: rgba(99, 102, 241, 0.55);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.statusPill-outside {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: rgba(148, 163, 184, 0.12);
+}
+
 .outsideLogSummary {
   background: rgba(148, 163, 184, 0.12);
 }
@@ -686,6 +710,22 @@ button.secondary {
   color: rgba(148, 163, 184, 1);
 }
 
+.dailyCount.status-normal {
+  color: rgba(34, 197, 94, 0.95);
+}
+
+.dailyCount.status-late {
+  color: rgba(245, 158, 11, 0.95);
+}
+
+.dailyCount.status-leave {
+  color: rgba(99, 102, 241, 0.95);
+}
+
+.dailyCount.status-outside {
+  color: rgba(148, 163, 184, 1);
+}
+
 .yearGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));
@@ -726,6 +766,18 @@ button.secondary {
   background: rgba(148, 163, 184, 1);
 }
 
+.normalDot {
+  background: rgba(34, 197, 94, 0.95);
+}
+
+.lateDot {
+  background: rgba(245, 158, 11, 0.95);
+}
+
+.leaveDot {
+  background: rgba(99, 102, 241, 0.95);
+}
+
 .sep {
   width: 1px;
   height: 14px;
@@ -764,6 +816,21 @@ button.secondary {
 
 .outsideChip {
   background: rgba(148, 163, 184, 0.2);
+}
+
+.normalChip {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.55);
+}
+
+.lateChip {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.58);
+}
+
+.leaveChip {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(99, 102, 241, 0.58);
 }
 
 .emptyChip {
@@ -872,9 +939,20 @@ button.secondary {
   background: rgba(148, 163, 184, 0.0);
 }
 
-.cell.real .cellInner {
+.cell.real .cellInner,
+.cell.normal .cellInner {
   opacity: 1;
   background: rgba(34, 197, 94, 0.9);
+}
+
+.cell.late .cellInner {
+  opacity: 1;
+  background: rgba(245, 158, 11, 0.92);
+}
+
+.cell.leave .cellInner {
+  opacity: 1;
+  background: rgba(99, 102, 241, 0.92);
 }
 
 .cell.outside {

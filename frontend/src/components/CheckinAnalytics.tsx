@@ -4,8 +4,21 @@ import { listCheckins, type CheckIn } from '../api'
 import { useI18n } from '../i18n'
 
 type Tab = 'daily' | 'monthly' | 'yearly'
+type CheckinStatus = CheckIn['status']
 
 const tzDefault = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
+const statusOrder: CheckinStatus[] = ['normal', 'late', 'leave', 'outside']
+
+function pickDominantStatus(current: CheckinStatus | undefined, incoming: CheckinStatus): CheckinStatus {
+  if (!current) return incoming
+  const rank: Record<CheckinStatus, number> = {
+    normal: 4,
+    late: 3,
+    leave: 2,
+    outside: 1,
+  }
+  return rank[incoming] > rank[current] ? incoming : current
+}
 
 function pad2(n: number) {
   return String(n).padStart(2, '0')
@@ -138,26 +151,40 @@ export default function CheckinAnalytics() {
 
     return days.map((k) => {
       const arr = checkinsByDateKey.get(k) ?? []
+      const counts: Record<CheckinStatus, number> = {
+        normal: 0,
+        late: 0,
+        leave: 0,
+        outside: 0,
+      }
+      for (const c of arr) counts[c.status] += 1
       const joined = arr.length
-      return { dateKey: k, joined }
+      return { dateKey: k, joined, counts }
     })
   }, [checkinsByDateKey, now, tz])
 
   const yearlyData = useMemo(() => {
-    const map = new Map<string, { joined: number }>()
+    const map = new Map<string, { joined: number; counts: Record<CheckinStatus, number> }>()
     for (const c of checkins) {
       const parts = getCheckinYMD(c, tz)
       const mKey = `${parts.y}-${pad2(parts.m)}`
-      const cur = map.get(mKey) ?? { joined: 0 }
+      const cur = map.get(mKey) ?? {
+        joined: 0,
+        counts: { normal: 0, late: 0, leave: 0, outside: 0 },
+      }
       cur.joined += 1
+      cur.counts[c.status] += 1
       map.set(mKey, cur)
     }
 
     // Render the selected year only; if you want rolling 12 months, we can adjust.
-    const res: Array<{ monthKey: string; joined: number }> = []
+    const res: Array<{ monthKey: string; joined: number; counts: Record<CheckinStatus, number> }> = []
     for (let m = 1; m <= 12; m++) {
       const mKey = `${selectedYear}-${pad2(m)}`
-      const v = map.get(mKey) ?? { joined: 0 }
+      const v = map.get(mKey) ?? {
+        joined: 0,
+        counts: { normal: 0, late: 0, leave: 0, outside: 0 },
+      }
       res.push({ monthKey: mKey, ...v })
     }
     return res
@@ -170,15 +197,15 @@ export default function CheckinAnalytics() {
 
     const usersSet = new Set<string>()
 
-    // statusByUserDay[nickname][dateKey] => true (check-in exists)
-    const statusByUserDay = new Map<string, Map<string, true>>()
+    // statusByUserDay[nickname][dateKey] => most relevant status for that day
+    const statusByUserDay = new Map<string, Map<string, CheckinStatus>>()
     for (const c of checkins) {
       const p = getCheckinYMD(c, tz)
       if (p.y !== selectedYear || p.m !== selectedMonth) continue
       usersSet.add(c.nickname)
       const dKey = dateKey(p.y, p.m, p.day)
       const userMap = statusByUserDay.get(c.nickname) ?? new Map()
-      userMap.set(dKey, true)
+      userMap.set(dKey, pickDominantStatus(userMap.get(dKey), c.status))
       statusByUserDay.set(c.nickname, userMap)
     }
 
@@ -253,9 +280,14 @@ export default function CheckinAnalytics() {
           {dailyData.map((d) => (
             <div key={d.dateKey} className="dailyCell">
               <div className="dailyDate">{d.dateKey.slice(5)}</div>
-              <div className="dailyCount real">
+              <div className="dailyCount">
                 {d.joined} <span className="dailySmall">{t('stats.joins')}</span>
               </div>
+              {statusOrder.map((status) => (
+                <div key={status} className={`dailyCount status-${status}`}>
+                  {d.counts[status]} <span className="dailySmall">{t(`stats.status.${status}`)}</span>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -267,7 +299,11 @@ export default function CheckinAnalytics() {
             <div key={m.monthKey} className="yearTile">
               <div className="yearMonth">{getMonthLabel(selectedYear, Number(m.monthKey.slice(5, 7)))}</div>
               <div className="yearCounts">
-                <span className="dot realDot" /> {m.joined}
+                {statusOrder.map((status) => (
+                  <span key={status} title={t(`stats.status.${status}`)}>
+                    <span className={`dot ${status}Dot`} /> {m.counts[status]}
+                  </span>
+                ))}
               </div>
             </div>
           ))}
@@ -278,7 +314,16 @@ export default function CheckinAnalytics() {
         <div className="matrixWrap">
           <div className="matrixLegend">
             <span className="legendItem">
-              <span className="legendChip realChip" /> {t('stats.checkedIn')}
+              <span className="legendChip normalChip" /> {t('stats.status.normal')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip lateChip" /> {t('stats.status.late')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip leaveChip" /> {t('stats.status.leave')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip outsideChip" /> {t('stats.status.outside')}
             </span>
             <span className="legendItem">
               <span className="legendChip emptyChip" /> {t('stats.noCheckin')}
@@ -334,8 +379,8 @@ export default function CheckinAnalytics() {
                       return (
                         <div
                           key={d}
-                          className="cell real"
-                          title={t('stats.checkedIn')}
+                          className={`cell ${st}`}
+                          title={t(`stats.status.${st}`)}
                         >
                           <span className="cellInner" />
                         </div>

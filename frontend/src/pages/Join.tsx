@@ -14,6 +14,7 @@ export default function Join() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [outsideWindow, setOutsideWindow] = useState(false)
+  const [lastCheckinStatus, setLastCheckinStatus] = useState<'normal' | 'late' | 'leave' | 'outside' | null>(null)
 
   const canSubmit = useMemo(() => nickname.trim().length > 0 && !submitting, [
     nickname,
@@ -27,11 +28,28 @@ export default function Join() {
     setSubmitting(true)
     try {
       const result = await createCheckin(nickname.trim())
+      setLastCheckinStatus(result.status)
       if (result.is_real) {
         window.location.assign(zoomUrl)
         return
       }
 
+      setOutsideWindow(true)
+      setSubmitting(false)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+      setSubmitting(false)
+    }
+  }
+
+  async function onApplyLeave() {
+    if (!nickname.trim()) return
+    setError(null)
+    setOutsideWindow(false)
+    setSubmitting(true)
+    try {
+      const result = await createCheckin(nickname.trim(), 'leave')
+      setLastCheckinStatus(result.status)
       setOutsideWindow(true)
       setSubmitting(false)
     } catch (err: unknown) {
@@ -65,12 +83,17 @@ export default function Join() {
             <button type="submit" disabled={!canSubmit}>
               {submitting ? t('join.joining') : t('join.joinZoom')}
             </button>
+            <button type="button" className="secondary" disabled={!canSubmit} onClick={onApplyLeave}>
+              {t('join.applyLeave')}
+            </button>
           </form>
           {error ? <p className="error">{error}</p> : null}
           {outsideWindow ? (
             <div className="notice">
               <div className="noticeTitle">{t('join.quickHeadsUp')}</div>
-              <div className="muted">{t('join.outsideWindowMsg')}</div>
+              <div className="muted">
+                {lastCheckinStatus === 'leave' ? t('join.leaveSubmittedMsg') : t('join.outsideWindowMsg')}
+              </div>
               <div className="row" style={{ marginTop: 12 }}>
                 <button type="button" onClick={() => window.location.assign(zoomUrl)}>
                   {t('join.continueZoom')}

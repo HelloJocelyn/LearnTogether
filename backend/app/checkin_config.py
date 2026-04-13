@@ -6,11 +6,16 @@ from typing import TypedDict
 
 
 class CheckinWindow(TypedDict):
-  start: str
-  end: str
+  normal_start: str
+  normal_end: str
+  late_end: str
 
 
-DEFAULT_WINDOW: CheckinWindow = {"start": "04:30", "end": "08:00"}
+DEFAULT_WINDOW: CheckinWindow = {
+  "normal_start": "04:30",
+  "normal_end": "05:30",
+  "late_end": "08:00",
+}
 
 
 def _default_config_path() -> Path:
@@ -32,9 +37,17 @@ def load_checkin_window_config() -> CheckinWindow:
   except (OSError, json.JSONDecodeError):
     return DEFAULT_WINDOW.copy()
 
-  start = str(raw.get("start", DEFAULT_WINDOW["start"]))
-  end = str(raw.get("end", DEFAULT_WINDOW["end"]))
-  return {"start": start, "end": end}
+  # Backward compatibility: old config used start/end only.
+  start_fallback = str(raw.get("start", DEFAULT_WINDOW["normal_start"]))
+  end_fallback = str(raw.get("end", DEFAULT_WINDOW["late_end"]))
+  normal_start = str(raw.get("normal_start", start_fallback))
+  normal_end = str(raw.get("normal_end", "05:30"))
+  late_end = str(raw.get("late_end", end_fallback))
+  return {
+    "normal_start": normal_start,
+    "normal_end": normal_end,
+    "late_end": late_end,
+  }
 
 
 def _validate_hhmm(value: str, field_name: str) -> str:
@@ -49,11 +62,18 @@ def _validate_hhmm(value: str, field_name: str) -> str:
   return v
 
 
-def save_checkin_window_config(*, start: str, end: str) -> CheckinWindow:
-  checked_start = _validate_hhmm(start, "start")
-  checked_end = _validate_hhmm(end, "end")
+def save_checkin_window_config(*, normal_start: str, normal_end: str, late_end: str) -> CheckinWindow:
+  checked_normal_start = _validate_hhmm(normal_start, "normal_start")
+  checked_normal_end = _validate_hhmm(normal_end, "normal_end")
+  checked_late_end = _validate_hhmm(late_end, "late_end")
+  if not (checked_normal_start < checked_normal_end < checked_late_end):
+    raise ValueError("must satisfy normal_start < normal_end < late_end")
   config_path = resolve_checkin_config_path()
   config_path.parent.mkdir(parents=True, exist_ok=True)
-  payload = {"start": checked_start, "end": checked_end}
+  payload = {
+    "normal_start": checked_normal_start,
+    "normal_end": checked_normal_end,
+    "late_end": checked_late_end,
+  }
   config_path.write_text(json.dumps(payload, ensure_ascii=True, indent=2) + "\n", encoding="utf-8")
   return payload

@@ -53,4 +53,10 @@ def init_db() -> None:
       if "checkin_date_local" not in cols:
         with engine.begin() as conn:
           conn.execute(text("ALTER TABLE checkins ADD COLUMN checkin_date_local TEXT"))
+      if "status" not in cols:
+        with engine.begin() as conn:
+          conn.execute(
+            text("ALTER TABLE checkins ADD COLUMN status TEXT NOT NULL DEFAULT 'outside'")
+          )
+          conn.execute(text("UPDATE checkins SET status = 'normal' WHERE is_real = 1"))
 

@@ -28,6 +28,7 @@ export type CheckIn = {
   created_at: string
   nickname: string
   is_real: boolean
+  status: 'normal' | 'late' | 'leave' | 'outside'
   checkin_date_local?: string | null
 }
 
@@ -63,8 +64,9 @@ export type Member = {
 }
 
 export type CheckinWindowConfig = {
-  start: string
-  end: string
+  normal_start: string
+  normal_end: string
+  late_end: string
   app_env: string
   source: string
 }
@@ -96,10 +98,13 @@ export function listCheckins(
   return request<CheckIn[]>(`/api/checkins?${qs.toString()}`)
 }
 
-export function createCheckin(nickname: string) {
+export function createCheckin(
+  nickname: string,
+  status?: 'normal' | 'late' | 'leave' | 'outside'
+) {
   return request<CheckIn>('/api/checkins', {
     method: 'POST',
-    body: JSON.stringify({ nickname }),
+    body: JSON.stringify({ nickname, ...(status ? { status } : {}) }),
   })
 }
 
@@ -160,10 +165,10 @@ export function getCheckinWindowConfig() {
   return request<CheckinWindowConfig>('/api/settings/checkin-window')
 }
 
-export function updateCheckinWindowConfig(start: string, end: string) {
+export function updateCheckinWindowConfig(normal_start: string, normal_end: string, late_end: string) {
   return request<CheckinWindowConfig>('/api/settings/checkin-window', {
     method: 'PUT',
-    body: JSON.stringify({ start, end }),
+    body: JSON.stringify({ normal_start, normal_end, late_end }),
   })
 }
 

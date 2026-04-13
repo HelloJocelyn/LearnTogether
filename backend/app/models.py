@@ -21,6 +21,7 @@ class CheckIn(Base):
   created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
   nickname: Mapped[str] = mapped_column(String(80), nullable=False)
   is_real: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+  status: Mapped[str] = mapped_column(String(20), nullable=False, default="outside")
   checkin_date_local: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
 
 
