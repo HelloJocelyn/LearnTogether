@@ -113,6 +113,23 @@ echo "Setting up backend virtualenv and dependencies..."
 backend/.venv/bin/pip install --upgrade pip
 backend/.venv/bin/pip install -r backend/requirements.txt
 
+echo "Preparing backend database migration..."
+DB_FILE="${SCRIPT_DIR}/backend/app.db"
+if [ -f "$DB_FILE" ]; then
+  BACKUP_FILE="${SCRIPT_DIR}/backend/app.db.bak.$(date +%Y%m%d%H%M%S)"
+  cp "$DB_FILE" "$BACKUP_FILE"
+  echo "Backed up existing DB: $BACKUP_FILE"
+fi
+
+echo "Applying backend schema migrations (init_db)..."
+(
+  cd "${SCRIPT_DIR}/backend"
+  APP_ENV=production \
+  CHECKIN_TZ="${CHECKIN_TZ:-Asia/Tokyo}" \
+  CHECKIN_CONFIG_FILE="${SCRIPT_DIR}/backend/config/checkin_window.production.json" \
+  .venv/bin/python -c "from app.db import init_db; init_db(); print('init_db migration complete')"
+)
+
 echo "Creating backend systemd service..."
 sudo tee /etc/systemd/system/learntogether-backend.service >/dev/null <<EOF
 [Unit]
