@@ -1,15 +1,18 @@
-import os
 import logging
+import mimetypes
+import os
+import re
 from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from . import crud, schemas
+from .badge_storage import path_for_stored_filename, save_certificate_image
 from .checkin_config import (
   load_checkin_window_config,
   resolve_checkin_config_path,
@@ -17,10 +20,26 @@ from .checkin_config import (
 )
 from .daily_hero_service import get_daily_hero_response, get_today_hero_image_path
 from .db import get_db, init_db
+from .models import AchievementBadge
 
 
 app = FastAPI(title="LearnTogether API")
 logger = logging.getLogger("uvicorn.error")
+
+_BADGE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _parse_optional_member_id(raw: Optional[str]) -> Optional[int]:
+  if raw is None or str(raw).strip() == "":
+    return None
+  try:
+    v = int(raw)
+  except ValueError as exc:
+    raise HTTPException(status_code=400, detail="invalid member_id") from exc
+  if v < 1:
+    raise HTTPException(status_code=400, detail="invalid member_id")
+  return v
+
 
 # In Docker we proxy via Nginx (no CORS needed). For local dev, this is permissive.
 app.add_middleware(
@@ -174,6 +193,90 @@ def get_checkin_window_config():
   app_env = os.getenv("APP_ENV", "local").strip().lower() or "local"
   source = str(resolve_checkin_config_path())
   return schemas.CheckinWindowConfigOut(**window, app_env=app_env, source=source)
+
+
+@app.get("/api/badges", response_model=list[schemas.AchievementBadgeOut])
+def list_badges(
+  start_date: Optional[str] = None,
+  end_date: Optional[str] = None,
+  limit: int = 5000,
+  db: Session = Depends(get_db),
+):
+  rows = crud.list_badges(db, start_date=start_date, end_date=end_date, limit=limit)
+  return [schemas.achievement_badge_to_out(r) for r in rows]
+
+
+@app.post("/api/badges", response_model=schemas.AchievementBadgeOut)
+async def create_badge(
+  title: str = Form(...),
+  earned_date: str = Form(...),
+  nickname: str = Form(""),
+  member_id: Optional[str] = Form(None),
+  certificate: Optional[UploadFile] = File(None),
+  db: Session = Depends(get_db),
+):
+  title_clean = title.strip()
+  earned = earned_date.strip()
+  if not title_clean or not _BADGE_DATE.match(earned):
+    raise HTTPException(status_code=400, detail="invalid title or earned_date (use YYYY-MM-DD)")
+
+  mid = _parse_optional_member_id(member_id)
+  resolved_member_id: Optional[int] = None
+  resolved_nickname = ""
+  if mid is not None:
+    member = crud.get_active_member_by_id(db, mid)
+    if member is None:
+      raise HTTPException(status_code=400, detail="member not found or inactive")
+    resolved_nickname = member.name
+    resolved_member_id = member.id
+  else:
+    resolved_nickname = nickname.strip()
+    if not resolved_nickname:
+      raise HTTPException(status_code=400, detail="nickname is required when member is not linked")
+
+  row = crud.create_badge(
+    db,
+    nickname=resolved_nickname,
+    title=title_clean,
+    earned_date_local=earned,
+    member_id=resolved_member_id,
+  )
+
+  if certificate and certificate.filename:
+    try:
+      data = await certificate.read()
+      if not data:
+        raise ValueError("certificate image is empty")
+      fname = save_certificate_image(
+        badge_id=row.id, content_type=certificate.content_type, data=data
+      )
+      updated = crud.update_badge_certificate_filename(db, badge_id=row.id, filename=fname)
+      if updated is None:
+        raise RuntimeError("badge row missing after save")
+      row = updated
+    except ValueError as exc:
+      crud.delete_badge(db, badge_id=row.id)
+      raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+  return schemas.achievement_badge_to_out(row)
+
+
+@app.get("/api/badges/{badge_id}/certificate")
+def get_badge_certificate(badge_id: int, db: Session = Depends(get_db)):
+  row = db.get(AchievementBadge, badge_id)
+  if row is None or not row.certificate_image_filename:
+    raise HTTPException(status_code=404, detail="certificate image not found")
+  path = path_for_stored_filename(row.certificate_image_filename)
+  if not path.is_file():
+    raise HTTPException(status_code=404, detail="certificate file missing")
+  mt = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+  return FileResponse(path, media_type=mt)
+
+
+@app.delete("/api/badges/{badge_id}", status_code=204)
+def delete_badge(badge_id: int, db: Session = Depends(get_db)):
+  if not crud.delete_badge(db, badge_id=badge_id):
+    raise HTTPException(status_code=404, detail="badge not found")
 
 
 @app.put("/api/settings/checkin-window", response_model=schemas.CheckinWindowConfigOut)

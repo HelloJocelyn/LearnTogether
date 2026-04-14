@@ -19,7 +19,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`Request failed (${res.status}): ${text || res.statusText}`)
   }
 
-  return (await res.json()) as T
+  if (res.status === 204) {
+    return undefined as T
+  }
+  const text = await res.text()
+  if (!text.trim()) {
+    return undefined as T
+  }
+  return JSON.parse(text) as T
 }
 
 export type Health = { ok: boolean }
@@ -77,6 +84,16 @@ export type DailyHero = {
   title?: string | null
   subtitle?: string | null
   image_url?: string | null
+}
+
+export type AchievementBadge = {
+  id: number
+  created_at: string
+  nickname: string
+  title: string
+  earned_date_local: string
+  member_id?: number | null
+  certificate_image_url?: string | null
 }
 
 export function getHealth() {
@@ -174,5 +191,40 @@ export function updateCheckinWindowConfig(normal_start: string, normal_end: stri
 
 export function getDailyHero() {
   return request<DailyHero>('/api/daily-hero')
+}
+
+export function listBadges(opts?: { startDate?: string; endDate?: string; limit?: number }) {
+  const qs = new URLSearchParams({
+    ...(opts?.limit != null ? { limit: String(opts.limit) } : {}),
+    ...(opts?.startDate ? { start_date: opts.startDate } : {}),
+    ...(opts?.endDate ? { end_date: opts.endDate } : {}),
+  })
+  const q = qs.toString()
+  return request<AchievementBadge[]>(q ? `/api/badges?${q}` : '/api/badges')
+}
+
+export function createBadge(args: {
+  title: string
+  earnedDate: string
+  nickname?: string
+  memberId?: number
+  certificate?: File | null
+}) {
+  const fd = new FormData()
+  fd.append('title', args.title)
+  fd.append('earned_date', args.earnedDate)
+  if (args.memberId != null) {
+    fd.append('member_id', String(args.memberId))
+  } else {
+    fd.append('nickname', args.nickname ?? '')
+  }
+  if (args.certificate) {
+    fd.append('certificate', args.certificate)
+  }
+  return request<AchievementBadge>('/api/badges', { method: 'POST', body: fd })
+}
+
+export function deleteBadge(badgeId: number) {
+  return request<void>(`/api/badges/${badgeId}`, { method: 'DELETE' })
 }
 

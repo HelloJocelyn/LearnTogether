@@ -68,3 +68,19 @@ class DailyHero(Base):
   image_filename: Mapped[str] = mapped_column(String(80), nullable=False)
   created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
+
+class AchievementBadge(Base):
+  """Certificate or exam passed (e.g. JLPT N1), shown on statistics for earned_date_local."""
+
+  __tablename__ = "achievement_badges"
+
+  id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+  created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+  nickname: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+  title: Mapped[str] = mapped_column(String(200), nullable=False)
+  earned_date_local: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+  member_id: Mapped[Optional[int]] = mapped_column(
+    Integer, ForeignKey("members.id", ondelete="SET NULL"), nullable=True, index=True
+  )
+  certificate_image_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+

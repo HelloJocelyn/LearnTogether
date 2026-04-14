@@ -60,3 +60,14 @@ def init_db() -> None:
           )
           conn.execute(text("UPDATE checkins SET status = 'normal' WHERE is_real = 1"))
 
+    if "achievement_badges" in insp.get_table_names():
+      ab_cols = {c["name"] for c in insp.get_columns("achievement_badges")}
+      if "member_id" not in ab_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE achievement_badges ADD COLUMN member_id INTEGER"))
+      if "certificate_image_filename" not in ab_cols:
+        with engine.begin() as conn:
+          conn.execute(
+            text("ALTER TABLE achievement_badges ADD COLUMN certificate_image_filename TEXT")
+          )
+

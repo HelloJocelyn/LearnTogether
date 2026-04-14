@@ -3,11 +3,20 @@ import logging
 from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import and_
 
-from .models import AttendanceImport, AttendanceImportItem, CheckIn, DailyHero, Item, Member
+from .badge_storage import delete_stored_file
+from .models import (
+  AchievementBadge,
+  AttendanceImport,
+  AttendanceImportItem,
+  CheckIn,
+  DailyHero,
+  Item,
+  Member,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -363,10 +372,22 @@ def create_member(db: Session, *, name: str) -> Member:
   return member
 
 
+def get_active_member_by_id(db: Session, member_id: int) -> Optional[Member]:
+  member = db.get(Member, member_id)
+  if member is None or not member.is_active:
+    return None
+  return member
+
+
 def deactivate_member(db: Session, *, member_id: int) -> None:
   member = db.get(Member, member_id)
   if member is None:
     return
+  db.execute(
+    update(AchievementBadge)
+    .where(AchievementBadge.member_id == member_id)
+    .values(member_id=None)
+  )
   member.is_active = False
   db.commit()
 
@@ -402,4 +423,75 @@ def create_daily_hero(
 def delete_daily_hero(db: Session, *, row: DailyHero) -> None:
   db.delete(row)
   db.commit()
+
+
+def list_badges(
+  db: Session,
+  *,
+  start_date: Optional[str] = None,
+  end_date: Optional[str] = None,
+  limit: int = 5000,
+) -> list[AchievementBadge]:
+  stmt = select(AchievementBadge).order_by(
+    AchievementBadge.earned_date_local.desc(), AchievementBadge.id.desc()
+  )
+  if start_date and end_date:
+    stmt = stmt.where(
+      and_(
+        AchievementBadge.earned_date_local >= start_date,
+        AchievementBadge.earned_date_local < end_date,
+      )
+    )
+  elif start_date:
+    stmt = stmt.where(AchievementBadge.earned_date_local >= start_date)
+  elif end_date:
+    stmt = stmt.where(AchievementBadge.earned_date_local < end_date)
+  stmt = stmt.limit(limit)
+  return list(db.scalars(stmt).all())
+
+
+def create_badge(
+  db: Session,
+  *,
+  nickname: str,
+  title: str,
+  earned_date_local: str,
+  member_id: Optional[int] = None,
+  certificate_image_filename: Optional[str] = None,
+) -> AchievementBadge:
+  now = datetime.now(timezone.utc)
+  row = AchievementBadge(
+    created_at=now,
+    nickname=nickname.strip(),
+    title=title.strip(),
+    earned_date_local=earned_date_local.strip(),
+    member_id=member_id,
+    certificate_image_filename=certificate_image_filename,
+  )
+  db.add(row)
+  db.commit()
+  db.refresh(row)
+  return row
+
+
+def update_badge_certificate_filename(
+  db: Session, *, badge_id: int, filename: str
+) -> Optional[AchievementBadge]:
+  row = db.get(AchievementBadge, badge_id)
+  if row is None:
+    return None
+  row.certificate_image_filename = filename
+  db.commit()
+  db.refresh(row)
+  return row
+
+
+def delete_badge(db: Session, *, badge_id: int) -> bool:
+  row = db.get(AchievementBadge, badge_id)
+  if row is None:
+    return False
+  delete_stored_file(row.certificate_image_filename)
+  db.delete(row)
+  db.commit()
+  return True
 

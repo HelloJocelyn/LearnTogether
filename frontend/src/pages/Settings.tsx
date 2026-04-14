@@ -139,9 +139,7 @@ export default function Settings() {
             <span className="muted">{t('settings.collapsed')}</span>
           </summary>
           <div className="shareBody">
-            <p className="muted">
-              {t('settings.shareDesc')}
-            </p>
+            <p className="muted">{t('settings.shareDesc')}</p>
             <div className="qrWrap">
               <QRCodeCanvas value={joinUrl} size={220} includeMargin />
             </div>

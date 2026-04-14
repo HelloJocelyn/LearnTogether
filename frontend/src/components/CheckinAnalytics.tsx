@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { listCheckins, type CheckIn } from '../api'
+import { listBadges, listCheckins, type AchievementBadge, type CheckIn } from '../api'
 import { useI18n } from '../i18n'
 
 type Tab = 'daily' | 'monthly' | 'yearly'
@@ -93,6 +93,7 @@ export default function CheckinAnalytics() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [checkins, setCheckins] = useState<CheckIn[]>([])
+  const [badges, setBadges] = useState<AchievementBadge[]>([])
 
   const tz = tzDefault
 
@@ -119,9 +120,14 @@ export default function CheckinAnalytics() {
 
     setLoading(true)
     setError(null)
-    // Include all check-ins so statistics is visible even outside real window.
-    listCheckins(5000, false, { startDate: startKey, endDate: endKey })
-      .then(setCheckins)
+    Promise.all([
+      listCheckins(5000, false, { startDate: startKey, endDate: endKey }),
+      listBadges({ startDate: startKey, endDate: endKey, limit: 5000 }),
+    ])
+      .then(([ci, bd]) => {
+        setCheckins(ci)
+        setBadges(bd)
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
   }, [now, todayParts.day, todayParts.m, todayParts.y, tz])
@@ -137,6 +143,19 @@ export default function CheckinAnalytics() {
     }
     return map
   }, [checkins, tz])
+
+  const badgesByDateKey = useMemo(() => {
+    const map = new Map<string, AchievementBadge[]>()
+    for (const b of badges) {
+      const parsed = parseDateKey(b.earned_date_local)
+      if (!parsed) continue
+      const key = dateKey(parsed.y, parsed.m, parsed.day)
+      const arr = map.get(key)
+      if (arr) arr.push(b)
+      else map.set(key, [b])
+    }
+    return map
+  }, [badges])
 
   const dailyData = useMemo(() => {
     const days: string[] = []
@@ -159,9 +178,10 @@ export default function CheckinAnalytics() {
       }
       for (const c of arr) counts[c.status] += 1
       const joined = arr.length
-      return { dateKey: k, joined, counts }
+      const dayBadges = badgesByDateKey.get(k) ?? []
+      return { dateKey: k, joined, counts, dayBadges }
     })
-  }, [checkinsByDateKey, now, tz])
+  }, [badgesByDateKey, checkinsByDateKey, now, tz])
 
   const yearlyData = useMemo(() => {
     const map = new Map<string, { joined: number; counts: Record<CheckinStatus, number> }>()
@@ -178,17 +198,30 @@ export default function CheckinAnalytics() {
     }
 
     // Render the selected year only; if you want rolling 12 months, we can adjust.
-    const res: Array<{ monthKey: string; joined: number; counts: Record<CheckinStatus, number> }> = []
+    const badgeMonthCounts = new Map<string, number>()
+    for (const b of badges) {
+      const parsed = parseDateKey(b.earned_date_local)
+      if (!parsed || parsed.y !== selectedYear) continue
+      const mKey = `${parsed.y}-${pad2(parsed.m)}`
+      badgeMonthCounts.set(mKey, (badgeMonthCounts.get(mKey) ?? 0) + 1)
+    }
+
+    const res: Array<{
+      monthKey: string
+      joined: number
+      counts: Record<CheckinStatus, number>
+      badgeCount: number
+    }> = []
     for (let m = 1; m <= 12; m++) {
       const mKey = `${selectedYear}-${pad2(m)}`
       const v = map.get(mKey) ?? {
         joined: 0,
         counts: { normal: 0, late: 0, leave: 0, outside: 0 },
       }
-      res.push({ monthKey: mKey, ...v })
+      res.push({ monthKey: mKey, ...v, badgeCount: badgeMonthCounts.get(mKey) ?? 0 })
     }
     return res
-  }, [checkins, selectedYear, tz])
+  }, [badges, checkins, selectedYear, tz])
 
   const monthlyMatrix = useMemo(() => {
     const monthIndex0 = selectedMonth - 1
@@ -209,9 +242,22 @@ export default function CheckinAnalytics() {
       statusByUserDay.set(c.nickname, userMap)
     }
 
+    const badgesByUserDay = new Map<string, Map<string, AchievementBadge[]>>()
+    for (const b of badges) {
+      const p = parseDateKey(b.earned_date_local)
+      if (!p || p.y !== selectedYear || p.m !== selectedMonth) continue
+      usersSet.add(b.nickname)
+      const dKey = dateKey(p.y, p.m, p.day)
+      const userMap = badgesByUserDay.get(b.nickname) ?? new Map()
+      const arr = userMap.get(dKey) ?? []
+      arr.push(b)
+      userMap.set(dKey, arr)
+      badgesByUserDay.set(b.nickname, userMap)
+    }
+
     const users = Array.from(usersSet).sort()
-    return { users, days, statusByUserDay }
-  }, [checkins, selectedMonth, selectedYear, tz])
+    return { users, days, statusByUserDay, badgesByUserDay }
+  }, [badges, checkins, selectedMonth, selectedYear, tz])
 
   const availableYears = useMemo(() => {
     const s = new Set<number>()
@@ -219,10 +265,14 @@ export default function CheckinAnalytics() {
       const p = getCheckinYMD(c, tz)
       s.add(p.y)
     }
+    for (const b of badges) {
+      const parsed = parseDateKey(b.earned_date_local)
+      if (parsed) s.add(parsed.y)
+    }
     const arr = Array.from(s).sort((a, b) => a - b)
     if (arr.length === 0) return [selectedYear]
     return arr
-  }, [checkins, selectedYear, tz])
+  }, [badges, checkins, selectedYear, tz])
 
   return (
     <section className="analytics">
@@ -288,6 +338,24 @@ export default function CheckinAnalytics() {
                   {d.counts[status]} <span className="dailySmall">{t(`stats.status.${status}`)}</span>
                 </div>
               ))}
+              {d.dayBadges.length > 0 ? (
+                <div className="dailyBadges">
+                  <div className="dailyBadgesTitle">{t('stats.badgesThatDay')}</div>
+                  <ul className="dailyBadgeList">
+                    {d.dayBadges.map((b) => (
+                      <li key={b.id} className="dailyBadgeItem">
+                        <span className="dailyBadgeMedal" aria-hidden="true">
+                          🏅
+                        </span>
+                        <span className="dailyBadgeText">
+                          <strong>{b.nickname}</strong>
+                          <span className="muted"> — {b.title}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -305,6 +373,11 @@ export default function CheckinAnalytics() {
                   </span>
                 ))}
               </div>
+              {m.badgeCount > 0 ? (
+                <div className="yearBadgeRow muted">
+                  {t('stats.badgesCountShort', { count: m.badgeCount })}
+                </div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -328,6 +401,9 @@ export default function CheckinAnalytics() {
             <span className="legendItem">
               <span className="legendChip emptyChip" /> {t('stats.noCheckin')}
             </span>
+            <span className="legendItem">
+              <span className="legendChip badgeChip" /> {t('stats.badgeLegend')}
+            </span>
           </div>
 
           <div className="matrixScroll">
@@ -349,6 +425,7 @@ export default function CheckinAnalytics() {
               {monthlyMatrix.users.map((u) => {
                 const av = avatarFor(u)
                 const userMap = monthlyMatrix.statusByUserDay.get(u)
+                const badgeMap = monthlyMatrix.badgesByUserDay.get(u)
                 return (
                   <div
                     key={u}
@@ -369,20 +446,37 @@ export default function CheckinAnalytics() {
                     {monthlyMatrix.days.map((d) => {
                       const dk = dateKey(selectedYear, selectedMonth, d)
                       const st = userMap?.get(dk)
-                      if (!st) {
+                      const badgeList = badgeMap?.get(dk) ?? []
+                      const badgeTitles = badgeList.map((x) => x.title).join(', ')
+                      const badgeTitle =
+                        badgeList.length > 0
+                          ? `${t('stats.badgeTooltip')}: ${badgeTitles}`
+                          : ''
+                      if (!st && badgeList.length === 0) {
                         return (
                           <div key={d} className="cell empty" aria-label={t('stats.noCheckin')}>
                             <span className="cellInner" />
                           </div>
                         )
                       }
+                      const titleParts = [st ? t(`stats.status.${st}`) : '', badgeTitle].filter(Boolean)
+                      const badgeOnly = !st && badgeList.length > 0
+                      const cellKind = st ?? (badgeOnly ? 'badgeOnly' : 'empty')
+                      const showMedalInside = badgeOnly
                       return (
                         <div
                           key={d}
-                          className={`cell ${st}`}
-                          title={t(`stats.status.${st}`)}
+                          className={`cell ${cellKind} ${badgeList.length > 0 ? 'hasBadge' : ''}`}
+                          title={titleParts.join(' · ')}
+                          aria-label={titleParts.join(' · ')}
                         >
-                          <span className="cellInner" />
+                          <span className="cellInner">
+                            {showMedalInside
+                              ? badgeList.length > 1
+                                ? String(badgeList.length)
+                                : '🏅'
+                              : ''}
+                          </span>
                         </div>
                       )
                     })}

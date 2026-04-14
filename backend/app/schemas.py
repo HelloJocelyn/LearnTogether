@@ -112,3 +112,33 @@ class DailyHeroOut(BaseModel):
   subtitle: Optional[str] = None
   image_url: Optional[str] = None
 
+
+class AchievementBadgeOut(BaseModel):
+  model_config = ConfigDict(from_attributes=True)
+
+  id: int
+  created_at: datetime
+  nickname: str
+  title: str
+  earned_date_local: str
+  member_id: Optional[int] = None
+  certificate_image_url: Optional[str] = None
+
+
+def achievement_badge_to_out(row: object) -> AchievementBadgeOut:
+  from .models import AchievementBadge
+
+  if not isinstance(row, AchievementBadge):
+    raise TypeError("expected AchievementBadge ORM row")
+  return AchievementBadgeOut(
+    id=row.id,
+    created_at=row.created_at,
+    nickname=row.nickname,
+    title=row.title,
+    earned_date_local=row.earned_date_local,
+    member_id=row.member_id,
+    certificate_image_url=(
+      f"/api/badges/{row.id}/certificate?v={row.id}" if row.certificate_image_filename else None
+    ),
+  )
+

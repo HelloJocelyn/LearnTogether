@@ -5,6 +5,7 @@ services:
     environment:
       - DATABASE_URL=sqlite:////data/app.db
       - CHECKIN_TZ=Asia/Tokyo
+      - BADGE_CERT_DIR=/data/badge_certificates
     volumes:
       - backend_data:/data
     ports:
