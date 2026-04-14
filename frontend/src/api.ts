@@ -35,7 +35,7 @@ export type CheckIn = {
   created_at: string
   nickname: string
   is_real: boolean
-  status: 'normal' | 'late' | 'leave' | 'outside'
+  status: 'morning' | 'night' | 'normal' | 'late' | 'leave' | 'outside'
   checkin_date_local?: string | null
 }
 
@@ -67,13 +67,16 @@ export type Member = {
   id: number
   created_at: string
   name: string
+  role: string
+  goal: string
   is_active: boolean
 }
 
 export type CheckinWindowConfig = {
-  normal_start: string
-  normal_end: string
-  late_end: string
+  morning_start: string
+  morning_end: string
+  night_start: string
+  night_end: string
   app_env: string
   source: string
 }
@@ -115,10 +118,7 @@ export function listCheckins(
   return request<CheckIn[]>(`/api/checkins?${qs.toString()}`)
 }
 
-export function createCheckin(
-  nickname: string,
-  status?: 'normal' | 'late' | 'leave' | 'outside'
-) {
+export function createCheckin(nickname: string, status?: 'leave') {
   return request<CheckIn>('/api/checkins', {
     method: 'POST',
     body: JSON.stringify({ nickname, ...(status ? { status } : {}) }),
@@ -165,10 +165,10 @@ export function listMembers() {
   return request<Member[]>('/api/members')
 }
 
-export function createMember(name: string) {
+export function createMember(name: string, role: string, goal: string) {
   return request<Member>('/api/members', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, role, goal }),
   })
 }
 
@@ -182,10 +182,32 @@ export function getCheckinWindowConfig() {
   return request<CheckinWindowConfig>('/api/settings/checkin-window')
 }
 
-export function updateCheckinWindowConfig(normal_start: string, normal_end: string, late_end: string) {
+export type ZoomJoinHints = {
+  meeting_id: string | null
+  passcode: string | null
+  join_url: string | null
+}
+
+export function getZoomJoinHints() {
+  return request<ZoomJoinHints>('/api/settings/zoom-join')
+}
+
+export function updateZoomJoinHints(meeting_id: string, passcode: string, join_url: string) {
+  return request<ZoomJoinHints>('/api/settings/zoom-join', {
+    method: 'PUT',
+    body: JSON.stringify({ meeting_id, passcode, join_url }),
+  })
+}
+
+export function updateCheckinWindowConfig(
+  morning_start: string,
+  morning_end: string,
+  night_start: string,
+  night_end: string
+) {
   return request<CheckinWindowConfig>('/api/settings/checkin-window', {
     method: 'PUT',
-    body: JSON.stringify({ normal_start, normal_end, late_end }),
+    body: JSON.stringify({ morning_start, morning_end, night_start, night_end }),
   })
 }
 
@@ -222,6 +244,30 @@ export function createBadge(args: {
     fd.append('certificate', args.certificate)
   }
   return request<AchievementBadge>('/api/badges', { method: 'POST', body: fd })
+}
+
+export function updateBadge(
+  badgeId: number,
+  args: {
+    title: string
+    earnedDate: string
+    nickname?: string
+    memberId?: number
+    certificate?: File | null
+  }
+) {
+  const fd = new FormData()
+  fd.append('title', args.title)
+  fd.append('earned_date', args.earnedDate)
+  if (args.memberId != null) {
+    fd.append('member_id', String(args.memberId))
+  } else {
+    fd.append('nickname', args.nickname ?? '')
+  }
+  if (args.certificate) {
+    fd.append('certificate', args.certificate)
+  }
+  return request<AchievementBadge>(`/api/badges/${badgeId}`, { method: 'PUT', body: fd })
 }
 
 export function deleteBadge(badgeId: number) {

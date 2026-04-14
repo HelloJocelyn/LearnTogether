@@ -1,12 +1,16 @@
-import { type FormEvent, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-import { createCheckin } from '../api'
+import ZoomManualJoin from '../components/ZoomManualJoin'
+import { createCheckin, getCheckinWindowConfig, type CheckinWindowConfig } from '../api'
+import { classifySession, formatClockInTz } from '../checkinWindow'
 import { useI18n } from '../i18n'
 
 const zoomUrl =
   (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
   'https://zoom.us/join'
+
+const displayTz = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
 
 export default function Join() {
   const { t } = useI18n()
@@ -14,23 +18,51 @@ export default function Join() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [outsideWindow, setOutsideWindow] = useState(false)
-  const [lastCheckinStatus, setLastCheckinStatus] = useState<'normal' | 'late' | 'leave' | 'outside' | null>(null)
+  const [lastCheckinStatus, setLastCheckinStatus] = useState<
+    'morning' | 'night' | 'normal' | 'late' | 'leave' | 'outside' | null
+  >(null)
+  const [sessionFlash, setSessionFlash] = useState<string | null>(null)
+  const [clockCfg, setClockCfg] = useState<CheckinWindowConfig | null>(null)
+  const [tick, setTick] = useState(0)
 
   const canSubmit = useMemo(() => nickname.trim().length > 0 && !submitting, [
     nickname,
     submitting,
   ])
 
+  useEffect(() => {
+    getCheckinWindowConfig()
+      .then(setClockCfg)
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const clockTime = useMemo(() => formatClockInTz(new Date(), displayTz), [tick, displayTz])
+  const activeSlot = useMemo(
+    () => (clockCfg ? classifySession(new Date(), displayTz, clockCfg) : 'outside'),
+    [tick, clockCfg, displayTz]
+  )
+
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
     setOutsideWindow(false)
+    setSessionFlash(null)
     setSubmitting(true)
     try {
       const result = await createCheckin(nickname.trim())
       setLastCheckinStatus(result.status)
       if (result.is_real) {
-        window.location.assign(zoomUrl)
+        setSessionFlash(
+          t('home.checkinRecordedSession', { type: t(`home.status.${result.status}`) })
+        )
+        window.setTimeout(() => {
+          window.location.assign(zoomUrl)
+        }, 1400)
         return
       }
 
@@ -46,6 +78,7 @@ export default function Join() {
     if (!nickname.trim()) return
     setError(null)
     setOutsideWindow(false)
+    setSessionFlash(null)
     setSubmitting(true)
     try {
       const result = await createCheckin(nickname.trim(), 'leave')
@@ -73,6 +106,24 @@ export default function Join() {
       <main className="main">
         <section className="card">
           <h2>{t('join.enterNickname')}</h2>
+          {clockCfg ? (
+            <div className="checkinClockBlock">
+              <div className="checkinClockTime">{clockTime}</div>
+              <div className="muted checkinClockTz">{displayTz}</div>
+              <div className="muted checkinWindowLine">
+                {t('home.morningWindow')} {clockCfg.morning_start}–{clockCfg.morning_end} ·{' '}
+                {t('home.nightWindow')} {clockCfg.night_start}–{clockCfg.night_end}
+              </div>
+              <div className={`checkinNowSlot checkinNowSlot-${activeSlot}`}>
+                {t('home.nowInSession')}: {t(`home.status.${activeSlot}`)}
+              </div>
+            </div>
+          ) : null}
+          {sessionFlash ? (
+            <p className="checkinSessionFlash" role="status">
+              {sessionFlash}
+            </p>
+          ) : null}
           <form onSubmit={onSubmit} className="row">
             <input
               value={nickname}
@@ -87,6 +138,7 @@ export default function Join() {
               {t('join.applyLeave')}
             </button>
           </form>
+          <ZoomManualJoin />
           {error ? <p className="error">{error}</p> : null}
           {outsideWindow ? (
             <div className="notice">
@@ -116,4 +168,3 @@ export default function Join() {
     </div>
   )
 }
-

@@ -1,6 +1,13 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
-import { getCheckinWindowConfig, listCheckins, updateCheckinWindowConfig, type CheckIn } from '../api'
+import {
+  getCheckinWindowConfig,
+  getZoomJoinHints,
+  listCheckins,
+  updateCheckinWindowConfig,
+  updateZoomJoinHints,
+  type CheckIn,
+} from '../api'
 import { useI18n } from '../i18n'
 
 const displayTz = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
@@ -46,43 +53,54 @@ function avatarFor(nickname: string) {
 export default function Settings() {
   const { t } = useI18n()
   const joinUrl = useMemo(() => `${window.location.origin}/join`, [])
-  const [normalStart, setNormalStart] = useState('')
-  const [normalEnd, setNormalEnd] = useState('')
-  const [lateEnd, setLateEnd] = useState('')
-  const [appEnv, setAppEnv] = useState('')
-  const [source, setSource] = useState('')
+  const [morningStart, setMorningStart] = useState('')
+  const [morningEnd, setMorningEnd] = useState('')
+  const [nightStart, setNightStart] = useState('')
+  const [nightEnd, setNightEnd] = useState('')
+  const [zoomMeetingId, setZoomMeetingId] = useState('')
+  const [zoomPasscode, setZoomPasscode] = useState('')
+  const [zoomJoinUrl, setZoomJoinUrl] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [zoomSaving, setZoomSaving] = useState(false)
+  const [windowEditing, setWindowEditing] = useState(false)
+  const [zoomEditing, setZoomEditing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
+  const [zoomSaved, setZoomSaved] = useState<string | null>(null)
   const [outsideRows, setOutsideRows] = useState<CheckIn[]>([])
 
   useEffect(() => {
-    Promise.all([getCheckinWindowConfig(), listCheckins(500, false, { todayOnly: true })])
-      .then(([cfg, checkins]) => {
-        setNormalStart(cfg.normal_start)
-        setNormalEnd(cfg.normal_end)
-        setLateEnd(cfg.late_end)
-        setAppEnv(cfg.app_env)
-        setSource(cfg.source)
+    Promise.all([getCheckinWindowConfig(), getZoomJoinHints(), listCheckins(500, false, { todayOnly: true })])
+      .then(([cfg, zoom, checkins]) => {
+        setMorningStart(cfg.morning_start)
+        setMorningEnd(cfg.morning_end)
+        setNightStart(cfg.night_start)
+        setNightEnd(cfg.night_end)
+        setZoomMeetingId(zoom.meeting_id ?? '')
+        setZoomPasscode(zoom.passcode ?? '')
+        setZoomJoinUrl(zoom.join_url ?? '')
         setOutsideRows(checkins.filter((c) => !c.is_real))
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
   }, [])
 
-  async function onSaveWindow(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
+  async function onSaveWindow() {
     setSaving(true)
     setError(null)
     setSaved(null)
     try {
-      const cfg = await updateCheckinWindowConfig(normalStart, normalEnd, lateEnd)
-      setNormalStart(cfg.normal_start)
-      setNormalEnd(cfg.normal_end)
-      setLateEnd(cfg.late_end)
-      setAppEnv(cfg.app_env)
-      setSource(cfg.source)
+      const cfg = await updateCheckinWindowConfig(
+        morningStart,
+        morningEnd,
+        nightStart,
+        nightEnd
+      )
+      setMorningStart(cfg.morning_start)
+      setMorningEnd(cfg.morning_end)
+      setNightStart(cfg.night_start)
+      setNightEnd(cfg.night_end)
       setSaved(t('settings.saved'))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
@@ -91,49 +109,156 @@ export default function Settings() {
     }
   }
 
+  async function onSaveZoom() {
+    setZoomSaving(true)
+    setError(null)
+    setZoomSaved(null)
+    try {
+      const savedZoom = await updateZoomJoinHints(zoomMeetingId, zoomPasscode, zoomJoinUrl)
+      setZoomMeetingId(savedZoom.meeting_id ?? '')
+      setZoomPasscode(savedZoom.passcode ?? '')
+      setZoomJoinUrl(savedZoom.join_url ?? '')
+      setZoomSaved(t('settings.zoomSaved'))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setZoomSaving(false)
+    }
+  }
+
   return (
     <div className="page">
-      <main className="main">
-        <section className="card">
-          <h2>{t('settings.title')}</h2>
-          <p className="muted">{t('settings.checkinConfigDesc')}</p>
+      <main className="main settingsMain">
+        <section className="card settingsCard settingsPrimaryCard">
+          <div className="rowTop">
+            <h2 style={{ marginBottom: 0 }}>{t('settings.title')}</h2>
+            <button
+              type="button"
+              className="secondary"
+              disabled={loading || saving}
+              onClick={async () => {
+                if (!windowEditing) {
+                  setWindowEditing(true)
+                  return
+                }
+                await onSaveWindow()
+                setWindowEditing(false)
+              }}
+            >
+              {saving ? t('settings.saving') : windowEditing ? t('settings.saveWindow') : t('settings.edit')}
+            </button>
+          </div>
           {loading ? <p className="muted">{t('settings.loadingConfig')}</p> : null}
           {!loading ? (
-            <form onSubmit={onSaveWindow} className="quickJoinForm" style={{ marginTop: 12 }}>
-              <div className="muted">{t('settings.environment', { value: appEnv || 'local' })}</div>
-              <div className="muted">{t('settings.source', { value: source || '-' })}</div>
-              <label className="label">
-                {t('settings.windowStart')}
-                <input
-                  type="time"
-                  value={normalStart}
-                  onChange={(e) => setNormalStart(e.target.value)}
-                  required
-                />
-              </label>
-              <label className="label">
-                {t('settings.normalEnd')}
-                <input
-                  type="time"
-                  value={normalEnd}
-                  onChange={(e) => setNormalEnd(e.target.value)}
-                  required
-                />
-              </label>
-              <label className="label">
-                {t('settings.lateEnd')}
-                <input type="time" value={lateEnd} onChange={(e) => setLateEnd(e.target.value)} required />
-              </label>
-              <button type="submit" disabled={saving}>
-                {saving ? t('settings.saving') : t('settings.saveWindow')}
-              </button>
+            <form className="quickJoinForm" style={{ marginTop: 12 }}>
+              <div className="settingsTimePairRow">
+                <label className="label">
+                  {t('settings.morningStart')}
+                  <input
+                    type="time"
+                    value={morningStart}
+                    onChange={(e) => setMorningStart(e.target.value)}
+                    disabled={!windowEditing}
+                    required
+                  />
+                </label>
+                <label className="label">
+                  {t('settings.morningEnd')}
+                  <input
+                    type="time"
+                    value={morningEnd}
+                    onChange={(e) => setMorningEnd(e.target.value)}
+                    disabled={!windowEditing}
+                    required
+                  />
+                </label>
+              </div>
+              <div className="settingsTimePairRow">
+                <label className="label">
+                  {t('settings.nightStart')}
+                  <input
+                    type="time"
+                    value={nightStart}
+                    onChange={(e) => setNightStart(e.target.value)}
+                    disabled={!windowEditing}
+                    required
+                  />
+                </label>
+                <label className="label">
+                  {t('settings.nightEnd')}
+                  <input
+                    type="time"
+                    value={nightEnd}
+                    onChange={(e) => setNightEnd(e.target.value)}
+                    disabled={!windowEditing}
+                    required
+                  />
+                </label>
+              </div>
             </form>
           ) : null}
           {saved ? <p className="muted">{saved}</p> : null}
           {error ? <p className="error">{error}</p> : null}
         </section>
 
-        <details className="card" open={false}>
+        <section className="card settingsCard settingsPrimaryCard">
+          <div className="rowTop">
+            <h3 style={{ margin: 0 }}>{t('settings.zoomTitle')}</h3>
+            <button
+              type="button"
+              className="secondary"
+              disabled={loading || zoomSaving}
+              onClick={async () => {
+                if (!zoomEditing) {
+                  setZoomEditing(true)
+                  return
+                }
+                await onSaveZoom()
+                setZoomEditing(false)
+              }}
+            >
+              {zoomSaving ? t('settings.saving') : zoomEditing ? t('settings.zoomSave') : t('settings.edit')}
+            </button>
+          </div>
+          {!loading ? (
+            <form className="quickJoinForm" style={{ marginTop: 12 }}>
+              <label className="label">
+                {t('settings.zoomMeetingId')}
+                <input
+                  type="text"
+                  value={zoomMeetingId}
+                  onChange={(e) => setZoomMeetingId(e.target.value)}
+                  disabled={!zoomEditing}
+                  placeholder="12345678901"
+                />
+              </label>
+              <label className="label">
+                {t('settings.zoomPasscode')}
+                <input
+                  type="text"
+                  value={zoomPasscode}
+                  onChange={(e) => setZoomPasscode(e.target.value)}
+                  disabled={!zoomEditing}
+                  placeholder="passcode"
+                />
+              </label>
+              <label className="label">
+                {t('settings.zoomJoinUrl')}
+                <input
+                  type="url"
+                  value={zoomJoinUrl}
+                  onChange={(e) => setZoomJoinUrl(e.target.value)}
+                  disabled={!zoomEditing}
+                  placeholder="https://zoom.us/j/12345678901?pwd=..."
+                />
+              </label>
+            </form>
+          ) : null}
+          {zoomSaved ? <p className="muted">{zoomSaved}</p> : null}
+          {error ? <p className="error">{error}</p> : null}
+        </section>
+
+        <details className="card settingsCard" open={false}>
           <summary className="shareSummary">
             <span>{t('settings.shareTitle')}</span>
             <span className="muted">{t('settings.collapsed')}</span>
@@ -141,7 +266,7 @@ export default function Settings() {
           <div className="shareBody">
             <p className="muted">{t('settings.shareDesc')}</p>
             <div className="qrWrap">
-              <QRCodeCanvas value={joinUrl} size={220} includeMargin />
+              <QRCodeCanvas value={joinUrl} size={160} includeMargin />
             </div>
             <p className="muted">
               {t('settings.link')} <a href="/join">{joinUrl}</a>
@@ -150,13 +275,13 @@ export default function Settings() {
         </details>
 
         {outsideRows.length > 0 ? (
-          <section className="card">
-            <div className="daySummary outsideLogSummary" style={{ cursor: 'default' }}>
+          <details className="card settingsCard settingsOutsideCard" open={false}>
+            <summary className="daySummary outsideLogSummary">
               <span className="dayTitle">{t('home.outsideWindowLog')}</span>
               <span className="dayCount muted">
                 {t('home.outsideCheckinsCount', { count: outsideRows.length })}
               </span>
-            </div>
+            </summary>
             <div className="history outsideLogBody" style={{ marginTop: 10 }}>
               <ul className="list dayList outside" style={{ marginTop: 0 }}>
                 {outsideRows.map((c) => {
@@ -180,7 +305,7 @@ export default function Settings() {
                 })}
               </ul>
             </div>
-          </section>
+          </details>
         ) : null}
       </main>
     </div>

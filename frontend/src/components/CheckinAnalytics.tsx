@@ -3,15 +3,38 @@ import { useEffect, useMemo, useState } from 'react'
 import { listBadges, listCheckins, type AchievementBadge, type CheckIn } from '../api'
 import { useI18n } from '../i18n'
 
-type Tab = 'daily' | 'monthly' | 'yearly'
+type Tab = 'monthly' | 'yearly'
 type CheckinStatus = CheckIn['status']
 
 const tzDefault = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
-const statusOrder: CheckinStatus[] = ['normal', 'late', 'leave', 'outside']
+const statusOrder: CheckinStatus[] = ['morning', 'night', 'late', 'leave', 'outside']
+
+function normalizeStatusForStats(status: CheckinStatus): CheckinStatus {
+  return status === 'normal' ? 'morning' : status
+}
+
+function emptyStatusCounts(): Record<CheckinStatus, number> {
+  return {
+    morning: 0,
+    night: 0,
+    normal: 0,
+    late: 0,
+    leave: 0,
+    outside: 0,
+  }
+}
+
+function bumpStatusCount(counts: Record<CheckinStatus, number>, status: string) {
+  const raw = (status in counts ? status : 'outside') as CheckinStatus
+  const key = normalizeStatusForStats(raw)
+  counts[key] += 1
+}
 
 function pickDominantStatus(current: CheckinStatus | undefined, incoming: CheckinStatus): CheckinStatus {
   if (!current) return incoming
   const rank: Record<CheckinStatus, number> = {
+    morning: 6,
+    night: 5,
     normal: 4,
     late: 3,
     leave: 2,
@@ -132,57 +155,6 @@ export default function CheckinAnalytics() {
       .finally(() => setLoading(false))
   }, [now, todayParts.day, todayParts.m, todayParts.y, tz])
 
-  const checkinsByDateKey = useMemo(() => {
-    const map = new Map<string, CheckIn[]>()
-    for (const c of checkins) {
-      const parts = getCheckinYMD(c, tz)
-      const key = dateKey(parts.y, parts.m, parts.day)
-      const arr = map.get(key)
-      if (arr) arr.push(c)
-      else map.set(key, [c])
-    }
-    return map
-  }, [checkins, tz])
-
-  const badgesByDateKey = useMemo(() => {
-    const map = new Map<string, AchievementBadge[]>()
-    for (const b of badges) {
-      const parsed = parseDateKey(b.earned_date_local)
-      if (!parsed) continue
-      const key = dateKey(parsed.y, parsed.m, parsed.day)
-      const arr = map.get(key)
-      if (arr) arr.push(b)
-      else map.set(key, [b])
-    }
-    return map
-  }, [badges])
-
-  const dailyData = useMemo(() => {
-    const days: string[] = []
-    const end = new Date(now)
-    // last 14 local-ish days, then format into tz.
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(end)
-      d.setDate(d.getDate() - i)
-      const p = getTzYMDParts(d, tz)
-      days.push(dateKey(p.y, p.m, p.day))
-    }
-
-    return days.map((k) => {
-      const arr = checkinsByDateKey.get(k) ?? []
-      const counts: Record<CheckinStatus, number> = {
-        normal: 0,
-        late: 0,
-        leave: 0,
-        outside: 0,
-      }
-      for (const c of arr) counts[c.status] += 1
-      const joined = arr.length
-      const dayBadges = badgesByDateKey.get(k) ?? []
-      return { dateKey: k, joined, counts, dayBadges }
-    })
-  }, [badgesByDateKey, checkinsByDateKey, now, tz])
-
   const yearlyData = useMemo(() => {
     const map = new Map<string, { joined: number; counts: Record<CheckinStatus, number> }>()
     for (const c of checkins) {
@@ -190,10 +162,10 @@ export default function CheckinAnalytics() {
       const mKey = `${parts.y}-${pad2(parts.m)}`
       const cur = map.get(mKey) ?? {
         joined: 0,
-        counts: { normal: 0, late: 0, leave: 0, outside: 0 },
+        counts: emptyStatusCounts(),
       }
       cur.joined += 1
-      cur.counts[c.status] += 1
+      bumpStatusCount(cur.counts, c.status)
       map.set(mKey, cur)
     }
 
@@ -216,7 +188,7 @@ export default function CheckinAnalytics() {
       const mKey = `${selectedYear}-${pad2(m)}`
       const v = map.get(mKey) ?? {
         joined: 0,
-        counts: { normal: 0, late: 0, leave: 0, outside: 0 },
+        counts: emptyStatusCounts(),
       }
       res.push({ monthKey: mKey, ...v, badgeCount: badgeMonthCounts.get(mKey) ?? 0 })
     }
@@ -238,7 +210,7 @@ export default function CheckinAnalytics() {
       usersSet.add(c.nickname)
       const dKey = dateKey(p.y, p.m, p.day)
       const userMap = statusByUserDay.get(c.nickname) ?? new Map()
-      userMap.set(dKey, pickDominantStatus(userMap.get(dKey), c.status))
+      userMap.set(dKey, pickDominantStatus(userMap.get(dKey), normalizeStatusForStats(c.status)))
       statusByUserDay.set(c.nickname, userMap)
     }
 
@@ -258,6 +230,27 @@ export default function CheckinAnalytics() {
     const users = Array.from(usersSet).sort()
     return { users, days, statusByUserDay, badgesByUserDay }
   }, [badges, checkins, selectedMonth, selectedYear, tz])
+
+  const monthlyMemberSummary = useMemo(() => {
+    const byUser = new Map<
+      string,
+      { morning: number; night: number; late: number; leave: number; total: number }
+    >()
+    for (const c of checkins) {
+      const p = getCheckinYMD(c, tz)
+      if (p.y !== selectedYear || p.m !== selectedMonth) continue
+      const cur = byUser.get(c.nickname) ?? { morning: 0, night: 0, late: 0, leave: 0, total: 0 }
+      if (c.status === 'morning' || c.status === 'normal') cur.morning += 1
+      if (c.status === 'night') cur.night += 1
+      if (c.status === 'late') cur.late += 1
+      if (c.status === 'leave') cur.leave += 1
+      cur.total += 1
+      byUser.set(c.nickname, cur)
+    }
+    return Array.from(byUser.entries())
+      .map(([nickname, counts]) => ({ nickname, ...counts }))
+      .sort((a, b) => a.nickname.localeCompare(b.nickname))
+  }, [checkins, selectedMonth, selectedYear, tz])
 
   const availableYears = useMemo(() => {
     const s = new Set<number>()
@@ -280,9 +273,6 @@ export default function CheckinAnalytics() {
         <h2 style={{ marginBottom: 0 }}>{t('stats.title')}</h2>
         <div className="analyticsControls">
           <div className="tabs">
-            <button type="button" className={tab === 'daily' ? 'tabActive' : ''} onClick={() => setTab('daily')}>
-              {t('stats.daily')}
-            </button>
             <button type="button" className={tab === 'monthly' ? 'tabActive' : ''} onClick={() => setTab('monthly')}>
               {t('stats.monthly')}
             </button>
@@ -325,42 +315,6 @@ export default function CheckinAnalytics() {
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p className="muted">{t('stats.loading')}</p> : null}
 
-      {!loading && !error && tab === 'daily' ? (
-        <div className="dailyGrid">
-          {dailyData.map((d) => (
-            <div key={d.dateKey} className="dailyCell">
-              <div className="dailyDate">{d.dateKey.slice(5)}</div>
-              <div className="dailyCount">
-                {d.joined} <span className="dailySmall">{t('stats.joins')}</span>
-              </div>
-              {statusOrder.map((status) => (
-                <div key={status} className={`dailyCount status-${status}`}>
-                  {d.counts[status]} <span className="dailySmall">{t(`stats.status.${status}`)}</span>
-                </div>
-              ))}
-              {d.dayBadges.length > 0 ? (
-                <div className="dailyBadges">
-                  <div className="dailyBadgesTitle">{t('stats.badgesThatDay')}</div>
-                  <ul className="dailyBadgeList">
-                    {d.dayBadges.map((b) => (
-                      <li key={b.id} className="dailyBadgeItem">
-                        <span className="dailyBadgeMedal" aria-hidden="true">
-                          🏅
-                        </span>
-                        <span className="dailyBadgeText">
-                          <strong>{b.nickname}</strong>
-                          <span className="muted"> — {b.title}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
-
       {!loading && !error && tab === 'yearly' ? (
         <div className="yearGrid">
           {yearlyData.map((m) => (
@@ -385,9 +339,51 @@ export default function CheckinAnalytics() {
 
       {!loading && !error && tab === 'monthly' ? (
         <div className="matrixWrap">
+          <details className="memberMonthSummary" open={false}>
+            <summary className="memberMonthSummaryTitle memberMonthSummaryToggle">
+              {t('stats.memberMonthlySummaryTitle', {
+                month: getMonthLabel(selectedYear, selectedMonth),
+                year: selectedYear,
+              })}
+            </summary>
+            {monthlyMemberSummary.length === 0 ? (
+              <p className="muted">{t('stats.memberMonthlySummaryEmpty')}</p>
+            ) : (
+              <div className="memberMonthSummaryTableWrap">
+                <table className="memberMonthSummaryTable">
+                  <thead>
+                    <tr>
+                      <th>{t('stats.users')}</th>
+                      <th>{t('stats.status.morning')}</th>
+                      <th>{t('stats.status.night')}</th>
+                      <th>{t('stats.status.late')}</th>
+                      <th>{t('stats.status.leave')}</th>
+                      <th>{t('stats.memberMonthlySummaryTotal')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthlyMemberSummary.map((row) => (
+                      <tr key={row.nickname}>
+                        <td>{row.nickname}</td>
+                        <td>{row.morning}</td>
+                        <td>{row.night}</td>
+                        <td>{row.late}</td>
+                        <td>{row.leave}</td>
+                        <td>{row.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </details>
+
           <div className="matrixLegend">
             <span className="legendItem">
-              <span className="legendChip normalChip" /> {t('stats.status.normal')}
+              <span className="legendChip morningChip" /> {t('stats.status.morning')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip nightChip" /> {t('stats.status.night')}
             </span>
             <span className="legendItem">
               <span className="legendChip lateChip" /> {t('stats.status.late')}

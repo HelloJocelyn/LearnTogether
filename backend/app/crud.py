@@ -36,23 +36,34 @@ def _parse_hhmm(raw: Optional[str], fallback: time) -> time:
   return fallback
 
 
+def _minutes_from_clock(t: time) -> int:
+  return t.hour * 60 + t.minute
+
+
+def _in_window_inclusive(local_t: time, start_s: Optional[str], end_s: Optional[str], fb_start: time, fb_end: time) -> bool:
+  start = _parse_hhmm(start_s, fb_start)
+  end = _parse_hhmm(end_s, fb_end)
+  m = _minutes_from_clock(local_t)
+  a = _minutes_from_clock(start)
+  b = _minutes_from_clock(end)
+  return a <= m <= b
+
+
 def _classify_checkin_status(
   *,
   now: datetime,
   tz_name: Optional[str],
-  normal_start: Optional[str],
-  normal_end: Optional[str],
-  late_end: Optional[str],
+  morning_start: Optional[str],
+  morning_end: Optional[str],
+  night_start: Optional[str],
+  night_end: Optional[str],
 ) -> str:
   local = now.astimezone(ZoneInfo(tz_name)) if tz_name else now.astimezone()
   t = local.timetz().replace(tzinfo=None)
-  start = _parse_hhmm(normal_start, time(4, 30))
-  normal_cutoff = _parse_hhmm(normal_end, time(5, 30))
-  late_cutoff = _parse_hhmm(late_end, time(8, 0))
-  if start <= t < normal_cutoff:
-    return "normal"
-  if normal_cutoff <= t <= late_cutoff:
-    return "late"
+  if _in_window_inclusive(t, morning_start, morning_end, time(5, 0), time(8, 0)):
+    return "morning"
+  if _in_window_inclusive(t, night_start, night_end, time(19, 0), time(23, 0)):
+    return "night"
   return "outside"
 
 
@@ -156,9 +167,10 @@ def create_checkin(
   nickname: str,
   requested_status: Optional[str] = None,
   tz_name: Optional[str] = None,
-  normal_start: Optional[str] = None,
-  normal_end: Optional[str] = None,
-  late_end: Optional[str] = None,
+  morning_start: Optional[str] = None,
+  morning_end: Optional[str] = None,
+  night_start: Optional[str] = None,
+  night_end: Optional[str] = None,
 ) -> CheckIn:
   now = datetime.now(timezone.utc)
 
@@ -184,13 +196,14 @@ def create_checkin(
     refreshed_status = _classify_checkin_status(
       now=earliest.created_at,
       tz_name=tz_name,
-      normal_start=normal_start,
-      normal_end=normal_end,
-      late_end=late_end,
+      morning_start=morning_start,
+      morning_end=morning_end,
+      night_start=night_start,
+      night_end=night_end,
     )
     if earliest.status != "leave" and earliest.status != refreshed_status:
       earliest.status = refreshed_status
-      earliest.is_real = refreshed_status in {"normal", "late"}
+      earliest.is_real = refreshed_status in {"morning", "night", "normal", "late"}
       db.commit()
       db.refresh(earliest)
     return earliest
@@ -201,9 +214,10 @@ def create_checkin(
     else _classify_checkin_status(
       now=now,
       tz_name=tz_name,
-      normal_start=normal_start,
-      normal_end=normal_end,
-      late_end=late_end,
+      morning_start=morning_start,
+      morning_end=morning_end,
+      night_start=night_start,
+      night_end=night_end,
     )
   )
   checkin = CheckIn(
@@ -211,7 +225,7 @@ def create_checkin(
     nickname=nickname,
     checkin_date_local=local_date_text,
     status=status,
-    is_real=status in {"normal", "late"},
+    is_real=status in {"morning", "night", "normal", "late"},
   )
   db.add(checkin)
   db.commit()
@@ -344,28 +358,38 @@ def confirm_attendance_import(
 
 
 def list_members(db: Session) -> list[Member]:
-  stmt = select(Member).where(Member.is_active.is_(True)).order_by(Member.name.asc())
+  stmt = (
+    select(Member)
+    .where(Member.is_active.is_(True))
+    .order_by(Member.name.asc(), Member.role.asc(), Member.goal.asc())
+  )
   return list(db.scalars(stmt).all())
 
 
-def create_member(db: Session, *, name: str) -> Member:
+def create_member(db: Session, *, name: str, role: str, goal: str) -> Member:
   trimmed = name.strip()
-  if not trimmed:
-    raise ValueError("name is required")
-  parts = [part for part in trimmed.split() if part]
-  if len(parts) != 3:
-    raise ValueError('name must be in format: "nickname role goal"')
+  role_trimmed = role.strip()
+  goal_trimmed = goal.strip()
+  if not trimmed or not role_trimmed or not goal_trimmed:
+    raise ValueError("name, role and goal are required")
 
   existing = list(
     db.scalars(
-      select(Member).where(Member.name == trimmed, Member.is_active.is_(True)).limit(1)
+      select(Member)
+      .where(
+        Member.name == trimmed,
+        Member.role == role_trimmed,
+        Member.goal == goal_trimmed,
+        Member.is_active.is_(True),
+      )
+      .limit(1)
     ).all()
   )
   if existing:
     return existing[0]
 
   now = datetime.now(timezone.utc)
-  member = Member(created_at=now, name=trimmed, is_active=True)
+  member = Member(created_at=now, name=trimmed, role=role_trimmed, goal=goal_trimmed, is_active=True)
   db.add(member)
   db.commit()
   db.refresh(member)
@@ -469,6 +493,27 @@ def create_badge(
     certificate_image_filename=certificate_image_filename,
   )
   db.add(row)
+  db.commit()
+  db.refresh(row)
+  return row
+
+
+def update_badge(
+  db: Session,
+  *,
+  badge_id: int,
+  nickname: str,
+  title: str,
+  earned_date_local: str,
+  member_id: Optional[int] = None,
+) -> Optional[AchievementBadge]:
+  row = db.get(AchievementBadge, badge_id)
+  if row is None:
+    return None
+  row.nickname = nickname.strip()
+  row.title = title.strip()
+  row.earned_date_local = earned_date_local.strip()
+  row.member_id = member_id
   db.commit()
   db.refresh(row)
   return row

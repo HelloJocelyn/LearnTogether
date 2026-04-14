@@ -15,9 +15,12 @@ class ItemOut(BaseModel):
   title: str
 
 
+CheckinSessionStatus = Literal["morning", "night", "normal", "late", "leave", "outside"]
+
+
 class CheckInCreate(BaseModel):
   nickname: str
-  status: Optional[Literal["normal", "late", "leave", "outside"]] = None
+  status: Optional[Literal["leave"]] = None
 
 
 class CheckInOut(BaseModel):
@@ -27,7 +30,7 @@ class CheckInOut(BaseModel):
   created_at: datetime
   nickname: str
   is_real: bool
-  status: Literal["normal", "late", "leave", "outside"]
+  status: CheckinSessionStatus
   checkin_date_local: Optional[str] = None
 
 
@@ -83,6 +86,8 @@ class AttendanceImportConfirmOut(BaseModel):
 
 class MemberCreate(BaseModel):
   name: str = Field(min_length=1, max_length=80)
+  role: str = Field(min_length=1, max_length=80)
+  goal: str = Field(min_length=1, max_length=80)
 
 
 class MemberOut(BaseModel):
@@ -91,18 +96,33 @@ class MemberOut(BaseModel):
   id: int
   created_at: datetime
   name: str
+  role: str
+  goal: str
   is_active: bool
 
 
 class CheckinWindowConfig(BaseModel):
-  normal_start: str = Field(pattern=r"^\d{2}:\d{2}$")
-  normal_end: str = Field(pattern=r"^\d{2}:\d{2}$")
-  late_end: str = Field(pattern=r"^\d{2}:\d{2}$")
+  morning_start: str = Field(pattern=r"^\d{2}:\d{2}$")
+  morning_end: str = Field(pattern=r"^\d{2}:\d{2}$")
+  night_start: str = Field(pattern=r"^\d{2}:\d{2}$")
+  night_end: str = Field(pattern=r"^\d{2}:\d{2}$")
 
 
 class CheckinWindowConfigOut(CheckinWindowConfig):
   app_env: str
   source: str
+
+
+class ZoomJoinHintsOut(BaseModel):
+  meeting_id: Optional[str] = None
+  passcode: Optional[str] = None
+  join_url: Optional[str] = None
+
+
+class ZoomJoinHintsIn(BaseModel):
+  meeting_id: Optional[str] = None
+  passcode: Optional[str] = None
+  join_url: Optional[str] = None
 
 
 class DailyHeroOut(BaseModel):

@@ -6,6 +6,9 @@ services:
       - DATABASE_URL=sqlite:////data/app.db
       - CHECKIN_TZ=Asia/Tokyo
       - BADGE_CERT_DIR=/data/badge_certificates
+      - ZOOM_MEETING_ID=${ZOOM_MEETING_ID:-}
+      - ZOOM_PASSCODE=${ZOOM_PASSCODE:-}
+      - ZOOM_JOIN_URL=${ZOOM_JOIN_URL:-}
     volumes:
       - backend_data:/data
     ports:

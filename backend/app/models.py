@@ -53,7 +53,9 @@ class Member(Base):
 
   id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
   created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-  name: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
+  name: Mapped[str] = mapped_column(String(80), nullable=False)
+  role: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+  goal: Mapped[str] = mapped_column(String(80), nullable=False, default="")
   is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 

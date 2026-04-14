@@ -52,9 +52,10 @@ CREATE TABLE members (
 	id INTEGER NOT NULL,
 	created_at DATETIME NOT NULL,
 	name VARCHAR(80) NOT NULL,
+	role VARCHAR(80) NOT NULL,
+	goal VARCHAR(80) NOT NULL,
 	is_active BOOLEAN NOT NULL,
-	PRIMARY KEY (id),
-	UNIQUE (name)
+	PRIMARY KEY (id)
 );
 
 CREATE TABLE achievement_badges (

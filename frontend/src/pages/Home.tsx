@@ -4,13 +4,17 @@ import {
   apiBaseUrl,
   createCheckin,
   createMember,
+  getCheckinWindowConfig,
   getDailyHero,
   listCheckins,
   listMembers,
   type CheckIn,
+  type CheckinWindowConfig,
   type DailyHero,
   type Member,
 } from '../api'
+import ZoomManualJoin from '../components/ZoomManualJoin'
+import { classifySession, formatClockInTz } from '../checkinWindow'
 import { useI18n } from '../i18n'
 
 const zoomUrl =
@@ -54,6 +58,10 @@ function splitMemberLabel(name: string) {
   return { title: name.trim(), subtitle: '' }
 }
 
+function memberDisplayName(m: Member): string {
+  return `${m.name} ${m.role} ${m.goal}`.trim()
+}
+
 function resolveHeroImageSrc(hero: DailyHero | null): string {
   const raw = hero?.image_url?.trim()
   if (!raw) return '/cat.png'
@@ -61,6 +69,15 @@ function resolveHeroImageSrc(hero: DailyHero | null): string {
   const prefix = apiBaseUrl()
   const path = raw.startsWith('/') ? raw : `/${raw}`
   return prefix ? `${prefix}${path}` : path
+}
+
+function splitEncourageLines(hero: DailyHero | null): string[] {
+  const raw = `${hero?.subtitle ?? ''}`.trim()
+  if (!raw) return []
+  return raw
+    .split(/\r?\n|[|｜]/)
+    .map((s) => s.trim())
+    .filter(Boolean)
 }
 
 export default function Home() {
@@ -74,12 +91,18 @@ export default function Home() {
   const [joinError, setJoinError] = useState<string | null>(null)
   const [outsideWindow, setOutsideWindow] = useState(false)
   const [lastCheckinStatus, setLastCheckinStatus] = useState<CheckIn['status'] | null>(null)
+  const [sessionFlash, setSessionFlash] = useState<string | null>(null)
+  const [clockCfg, setClockCfg] = useState<CheckinWindowConfig | null>(null)
+  const [tick, setTick] = useState(0)
   const [dailyHero, setDailyHero] = useState<DailyHero | null>(null)
   const [heroImgFailed, setHeroImgFailed] = useState(false)
   const memberFormatHint = 'nickname role goal'
   const selectedName =
     typeof selectedMemberId === 'number'
-      ? members.find((m) => m.id === selectedMemberId)?.name ?? ''
+      ? (() => {
+          const m = members.find((x) => x.id === selectedMemberId)
+          return m ? memberDisplayName(m) : ''
+        })()
       : ''
   const canJoin = !joining && (selectedName.trim().length > 0 || nickname.trim().length > 0)
   const currentZoneDate = useMemo(
@@ -109,7 +132,22 @@ export default function Home() {
     getDailyHero()
       .then(setDailyHero)
       .catch((e: unknown) => console.error(e))
+
+    getCheckinWindowConfig()
+      .then(setClockCfg)
+      .catch((e: unknown) => console.error(e))
   }, [])
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const clockTime = useMemo(() => formatClockInTz(new Date(), displayTz), [tick, displayTz])
+  const activeSlot = useMemo(
+    () => (clockCfg ? classifySession(new Date(), displayTz, clockCfg) : 'outside'),
+    [tick, clockCfg, displayTz]
+  )
 
   useEffect(() => {
     setHeroImgFailed(false)
@@ -135,17 +173,30 @@ export default function Home() {
 
     setJoinError(null)
     setOutsideWindow(false)
+    setSessionFlash(null)
     setJoining(true)
     try {
       if (!selectedName) {
-        const normalized = fallback.toLowerCase()
-        const exists = members.some((m) => m.name.trim().toLowerCase() === normalized)
+        const parts = fallback.split(/\s+/).filter(Boolean)
+        const normalized = {
+          name: parts[0] ?? '',
+          role: parts[1] ?? '',
+          goal: parts.slice(2).join(' '),
+        }
+        const exists = members.some(
+          (m) =>
+            m.name.trim().toLowerCase() === normalized.name.toLowerCase() &&
+            m.role.trim().toLowerCase() === normalized.role.toLowerCase() &&
+            m.goal.trim().toLowerCase() === normalized.goal.toLowerCase()
+        )
         if (!exists) {
-          const member = await createMember(fallback)
+          const member = await createMember(normalized.name, normalized.role, normalized.goal)
           setMembers((prev) => {
             const alreadyInList = prev.some((m) => m.id === member.id)
             if (alreadyInList) return prev
-            return [...prev, member].sort((a, b) => a.name.localeCompare(b.name))
+            return [...prev, member].sort((a, b) =>
+              memberDisplayName(a).localeCompare(memberDisplayName(b))
+            )
           })
         }
       }
@@ -155,7 +206,12 @@ export default function Home() {
       setLastCheckinStatus(result.status)
 
       if (result.is_real) {
-        window.location.assign(zoomUrl)
+        setSessionFlash(
+          t('home.checkinRecordedSession', { type: t(`home.status.${result.status}`) })
+        )
+        window.setTimeout(() => {
+          window.location.assign(zoomUrl)
+        }, 1400)
         return
       }
 
@@ -173,6 +229,7 @@ export default function Home() {
     if (!name) return
     setJoinError(null)
     setOutsideWindow(false)
+    setSessionFlash(null)
     setJoining(true)
     try {
       const result = await createCheckin(name, 'leave')
@@ -189,6 +246,7 @@ export default function Home() {
   const todaysJoins = useMemo(() => {
     return [...checkins].sort((a, b) => (a.id === b.id ? 0 : a.id > b.id ? -1 : 1))
   }, [checkins])
+  const encourageLines = useMemo(() => splitEncourageLines(dailyHero), [dailyHero])
 
   return (
     <div className="page">
@@ -196,9 +254,27 @@ export default function Home() {
         <div className="topPanel">
           <section className="card quickJoinSquare">
             <h2>🗓️ {t('home.dailyCheckin')}</h2>
+            {clockCfg ? (
+              <div className="checkinClockBlock">
+                <div className="checkinClockTime">{clockTime}</div>
+                <div className="muted checkinClockTz">{displayTz}</div>
+                <div className="muted checkinWindowLine">
+                  {t('home.morningWindow')}{' '}
+                  {clockCfg.morning_start}–{clockCfg.morning_end} · {t('home.nightWindow')}{' '}
+                  {clockCfg.night_start}–{clockCfg.night_end}
+                </div>
+                <div className={`checkinNowSlot checkinNowSlot-${activeSlot}`}>
+                  {t('home.nowInSession')}: {t(`home.status.${activeSlot}`)}
+                </div>
+              </div>
+            ) : null}
+            {sessionFlash ? (
+              <p className="checkinSessionFlash" role="status">
+                {sessionFlash}
+              </p>
+            ) : null}
             <form onSubmit={onQuickJoin} className="quickJoinForm">
               <div className="muted">{t('home.enterName')}</div>
-              <div className="muted">{t('home.requiredFormat', { format: memberFormatHint })}</div>
               <select
                 value={selectedMemberId}
                 onChange={(e) =>
@@ -210,7 +286,7 @@ export default function Home() {
                 </option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {memberDisplayName(m)}
                   </option>
                 ))}
               </select>
@@ -221,13 +297,19 @@ export default function Home() {
                   placeholder={t('home.inputPlaceholder')}
                 />
               </div>
-              <button type="submit" disabled={!canJoin} className="checkinCta">
-                {joining ? t('home.joining') : t('home.joinZoom')}
-              </button>
-              <button type="button" className="secondary" disabled={!canJoin || joining} onClick={onApplyLeave}>
-                {t('home.applyLeave')}
-              </button>
+              <div className="checkinActionsRow">
+                <button type="submit" disabled={!canJoin} className="checkinCta">
+                  {joining ? t('home.joining') : t('home.joinZoom')}
+                </button>
+                <button type="button" className="secondary" disabled={!canJoin || joining} onClick={onApplyLeave}>
+                  {t('home.applyLeave')}
+                </button>
+              </div>
             </form>
+            <details className="zoomManualDetails">
+              <summary className="zoomManualSummary">{t('home.zoomManualTitle')}</summary>
+              <ZoomManualJoin hideHeader hideHint />
+            </details>
             {joinError ? <p className="error">{joinError}</p> : null}
             {outsideWindow ? (
               <div className="notice">
@@ -255,8 +337,8 @@ export default function Home() {
 
           <section className="card keepUpCard">
             <div className="keepUpInner">
-              <div>
-                <h2>🐱 {t('home.keepItUp')}</h2>
+              <div className="keepUpHeader">
+                <h2>✨ {t('home.encourageTitle')}</h2>
                 <div className="muted">{t('home.todayJoinedMembers', { count: todayJoined })}</div>
                 <div className="muted">{t('home.dateWithTz', { tz: displayTz, date: currentZoneDate })}</div>
               </div>
@@ -265,7 +347,7 @@ export default function Home() {
                   src={resolveHeroImageSrc(dailyHero)}
                   alt={dailyHero?.image_url ? t('home.dailyHeroAlt') : t('home.studyCatAlt')}
                   className={
-                    dailyHero?.image_url && !heroImgFailed ? 'keepUpHeroImg' : 'keepUpCat'
+                    dailyHero?.image_url && !heroImgFailed ? 'keepUpHeroImg keepUpHeroImgTop' : 'keepUpCat'
                   }
                   onError={(e) => {
                     const el = e.currentTarget as HTMLImageElement
@@ -279,14 +361,18 @@ export default function Home() {
                     el.className = 'keepUpCat'
                   }}
                 />
-                {dailyHero?.image_url && !heroImgFailed && (dailyHero.title || dailyHero.subtitle) ? (
-                  <div className="keepUpHeroOverlay">
-                    {dailyHero.title ? <div className="keepUpHeroTitle">{dailyHero.title}</div> : null}
-                    {dailyHero.subtitle ? (
-                      <div className="keepUpHeroSubtitle">{dailyHero.subtitle}</div>
-                    ) : null}
-                  </div>
-                ) : null}
+              </div>
+              <div className="keepUpSentencePanel">
+                {dailyHero?.title ? <div className="keepUpHeroTitle">{dailyHero.title}</div> : null}
+                {encourageLines.length > 0 ? (
+                  <ul className="keepUpSentenceList">
+                    {encourageLines.map((line, idx) => (
+                      <li key={`${line}-${idx}`}>{line}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="muted keepUpFallbackText">{t('home.encourageFallback')}</div>
+                )}
               </div>
             </div>
           </section>

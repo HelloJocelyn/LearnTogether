@@ -160,7 +160,8 @@
 }
 
 .quickJoinSquare {
-  min-height: 220px;
+  min-height: 0;
+  padding: 14px;
 }
 
 .quickJoinForm {
@@ -200,23 +201,24 @@
 }
 
 .keepUpCard {
-  min-height: 220px;
+  min-height: 0;
   min-width: 0;
 }
 
 .keepUpInner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  gap: 10px;
   min-width: 0;
+}
+
+.keepUpHeader h2 {
+  margin-bottom: 4px;
 }
 
 .keepUpHeroVisual {
   position: relative;
-  flex: 0 1 320px;
   min-width: 0;
-  max-width: min(320px, 100%);
+  max-width: 100%;
 }
 
 .keepUpHeroImg {
@@ -229,34 +231,40 @@
   aspect-ratio: 16 / 9;
 }
 
-.keepUpHeroOverlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 12px 12px 10px;
-  border-radius: 0 0 12px 12px;
-  background: linear-gradient(transparent, rgba(15, 18, 28, 0.62));
-  color: #f8f9fc;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  pointer-events: none;
+.keepUpHeroImgTop {
+  max-height: 190px;
 }
 
 .keepUpHeroTitle {
-  font-weight: 650;
+  font-weight: 700;
   font-size: 0.95rem;
   line-height: 1.25;
 }
 
-.keepUpHeroSubtitle {
-  margin-top: 4px;
-  font-size: 0.8rem;
-  line-height: 1.3;
-  opacity: 0.95;
+.keepUpSentencePanel {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.keepUpSentenceList {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.keepUpSentenceList li {
+  line-height: 1.4;
+}
+
+.keepUpFallbackText {
+  margin-top: 8px;
 }
 
 .keepUpCat {
-  width: min(320px, 100%);
+  width: 100%;
   max-width: 100%;
   height: auto;
   object-fit: contain;
@@ -529,6 +537,16 @@ button.secondary {
   background: rgba(34, 197, 94, 0.12);
 }
 
+.statusPill-morning {
+  border-color: rgba(20, 184, 166, 0.6);
+  background: rgba(20, 184, 166, 0.14);
+}
+
+.statusPill-night {
+  border-color: rgba(99, 102, 241, 0.55);
+  background: rgba(99, 102, 241, 0.14);
+}
+
 .statusPill-late {
   border-color: rgba(245, 158, 11, 0.55);
   background: rgba(245, 158, 11, 0.14);
@@ -544,6 +562,165 @@ button.secondary {
   background: rgba(148, 163, 184, 0.12);
 }
 
+.checkinClockBlock {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  text-align: center;
+}
+
+.checkinClockTime {
+  font-size: 1.45rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.checkinClockTz {
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.checkinWindowLine {
+  font-size: 12px;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+.checkinNowSlot {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.checkinNowSlot-morning {
+  color: rgba(45, 212, 191, 0.95);
+}
+
+.checkinNowSlot-night {
+  color: rgba(165, 180, 252, 0.98);
+}
+
+.checkinNowSlot-outside {
+  opacity: 0.85;
+}
+
+.checkinSessionFlash {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  font-weight: 600;
+  text-align: center;
+}
+
+.zoomManualJoin {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
+  text-align: left;
+}
+
+.zoomManualJoinInline {
+  margin-top: 6px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.zoomManualJoinTitle {
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin-bottom: 4px;
+}
+
+.zoomManualJoinHint {
+  font-size: 12px;
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.zoomManualRow {
+  margin-bottom: 10px;
+}
+
+.zoomManualRow:last-child {
+  margin-bottom: 0;
+}
+
+.zoomManualLabel {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.zoomManualValueRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.zoomManualValue {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+}
+
+.zoomManualStatus {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.zoomManualCopy {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.quickJoinSquare .quickJoinForm {
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.checkinActionsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.zoomManualDetails {
+  margin-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, 0.28);
+  padding-top: 10px;
+}
+
+.zoomManualSummary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-h);
+  user-select: none;
+}
+
+.zoomManualDetails[open] .zoomManualSummary {
+  margin-bottom: 4px;
+}
+
 .outsideLogSummary {
   background: rgba(148, 163, 184, 0.12);
 }
@@ -556,6 +733,31 @@ button.secondary {
   max-height: 45vh;
   overflow: auto;
   padding-right: 4px;
+}
+
+.settingsMain {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.settingsCard {
+  max-height: min(78vh, 760px);
+  overflow: auto;
+}
+
+.settingsPrimaryCard {
+  height: min(58vh, 560px);
+}
+
+.settingsOutsideCard {
+  grid-column: 1 / -1;
+}
+
+.settingsTimePairRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .notice {
@@ -714,6 +916,14 @@ button.secondary {
   color: rgba(34, 197, 94, 0.95);
 }
 
+.dailyCount.status-morning {
+  color: rgba(45, 212, 191, 0.95);
+}
+
+.dailyCount.status-night {
+  color: rgba(165, 180, 252, 0.98);
+}
+
 .dailyCount.status-late {
   color: rgba(245, 158, 11, 0.95);
 }
@@ -770,6 +980,14 @@ button.secondary {
   background: rgba(34, 197, 94, 0.95);
 }
 
+.morningDot {
+  background: rgba(20, 184, 166, 0.95);
+}
+
+.nightDot {
+  background: rgba(99, 102, 241, 0.92);
+}
+
 .lateDot {
   background: rgba(245, 158, 11, 0.95);
 }
@@ -786,6 +1004,52 @@ button.secondary {
 
 .matrixWrap {
   margin-top: 10px;
+}
+
+.memberMonthSummary {
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 10px;
+}
+
+.memberMonthSummaryTitle {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.memberMonthSummaryToggle {
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0;
+}
+
+.memberMonthSummaryTableWrap {
+  overflow: auto;
+}
+
+.memberMonthSummaryTable {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+}
+
+.memberMonthSummaryTable th,
+.memberMonthSummaryTable td {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.memberMonthSummaryTable th:first-child,
+.memberMonthSummaryTable td:first-child {
+  text-align: left;
+}
+
+.memberMonthSummaryTable tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .matrixLegend {
@@ -821,6 +1085,16 @@ button.secondary {
 .normalChip {
   background: rgba(34, 197, 94, 0.25);
   border-color: rgba(34, 197, 94, 0.55);
+}
+
+.morningChip {
+  background: rgba(20, 184, 166, 0.28);
+  border-color: rgba(20, 184, 166, 0.6);
+}
+
+.nightChip {
+  background: rgba(99, 102, 241, 0.22);
+  border-color: rgba(99, 102, 241, 0.58);
 }
 
 .lateChip {
@@ -950,6 +1224,16 @@ button.secondary {
   background: rgba(34, 197, 94, 0.9);
 }
 
+.cell.morning .cellInner {
+  opacity: 1;
+  background: rgba(20, 184, 166, 0.92);
+}
+
+.cell.night .cellInner {
+  opacity: 1;
+  background: rgba(99, 102, 241, 0.88);
+}
+
 .cell.late .cellInner {
   opacity: 1;
   background: rgba(245, 158, 11, 0.92);
@@ -1046,10 +1330,117 @@ button.secondary {
   vertical-align: middle;
 }
 
+.badgeCircle {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  border: 1px solid rgba(234, 179, 8, 0.5);
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.92), rgba(255, 243, 205, 0.75));
+  display: grid;
+  place-items: center;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
+  flex: 0 0 auto;
+  box-shadow: inset 0 1px 6px rgba(161, 98, 7, 0.12);
+}
+
+button.badgeCircle {
+  border-width: 1px;
+  border-style: solid;
+  padding: 0;
+}
+
+.badgeCircleInner {
+  display: grid;
+  gap: 2px;
+  align-items: center;
+  justify-items: center;
+  padding: 5px;
+}
+
+.badgeCircleIcon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.badgeCircleTitle {
+  font-weight: 700;
+  font-size: 9px;
+  line-height: 1.2;
+  max-width: 58px;
+  word-break: break-word;
+}
+
+.badgeCircleDate {
+  font-size: 8px;
+  opacity: 0.78;
+  font-variant-numeric: tabular-nums;
+}
+
+.membersBadgeGrid {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  align-items: stretch;
+}
+
+.badgeCard {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  padding: 8px 6px;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+}
+
+.badgeCardEditing {
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.5);
+}
+
+.badgeCard .badgeCertThumbWrap {
+  border-radius: 8px;
+}
+
+.badgeCard .badgeCertThumb {
+  width: 44px;
+  height: 44px;
+}
+
+.badgeRemoveIconBtn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  margin-top: 2px;
+}
+
 .memberBadgeGroup {
   margin-top: 18px;
   padding-top: 14px;
   border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.membersSubSection {
+  margin-top: 12px;
+}
+
+.membersSubSectionSplit {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.badgeUpdateForm {
+  display: grid;
+  gap: 10px;
+}
+
+.badgeUpdateForm button[type='submit'] {
+  width: 100%;
 }
 
 .memberBadgeGroupFirst {
@@ -1076,7 +1467,91 @@ button.secondary {
   font-size: 14px;
 }
 
+.membersMain {
+  grid-template-columns: minmax(320px, 0.92fr) minmax(0, 1.25fr);
+  align-items: start;
+}
+
+.membersCard {
+  max-height: min(78vh, 760px);
+  overflow: auto;
+}
+
+.membersCardBadges {
+  max-height: none;
+  overflow: visible;
+}
+
+.membersListScroll {
+  max-height: min(42vh, 420px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.membersBadgesBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.membersBadgesListPanel {
+  min-height: 0;
+}
+
+.membersBadgesUpdatePanel {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
 @media (max-width: 1024px) {
+  .settingsMain {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsCard {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .settingsPrimaryCard {
+    height: auto;
+  }
+
+  .settingsOutsideCard {
+    grid-column: auto;
+  }
+
+  .settingsTimePairRow {
+    grid-template-columns: 1fr;
+  }
+
+  .membersMain {
+    grid-template-columns: 1fr;
+  }
+
+  .membersCard {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .membersListScroll {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .membersBadgesBody {
+    grid-template-columns: 1fr;
+  }
+
+  .membersBadgesUpdatePanel {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(148, 163, 184, 0.25);
+  }
+
   .topPanel {
     grid-template-columns: 1fr;
   }
@@ -1093,6 +1568,26 @@ button.secondary {
 
   .joinsGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .checkinActionsRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1025px) {
+  .badgeUpdateForm {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .badgeUpdateForm .badgeFullRow {
+    grid-column: 1 / -1;
+  }
+
+  .badgeUpdateForm button[type='submit'] {
+    grid-column: 1 / -1;
   }
 }
 

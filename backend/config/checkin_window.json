@@ -1,5 +1,9 @@
 {
-  "normal_start": "00:10",
-  "normal_end": "05:30",
-  "late_end": "23:30"
+  "morning_start": "05:00",
+  "morning_end": "08:00",
+  "night_start": "19:00",
+  "night_end": "23:00",
+  "zoom_meeting_id": "",
+  "zoom_passcode": "",
+  "zoom_join_url": ""
 }

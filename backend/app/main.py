@@ -3,6 +3,7 @@ import mimetypes
 import os
 import re
 from datetime import datetime, timedelta
+from urllib.parse import parse_qs, urlparse
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -15,8 +16,10 @@ from . import crud, schemas
 from .badge_storage import path_for_stored_filename, save_certificate_image
 from .checkin_config import (
   load_checkin_window_config,
+  load_zoom_join_settings,
   resolve_checkin_config_path,
   save_checkin_window_config,
+  save_zoom_join_settings,
 )
 from .daily_hero_service import get_daily_hero_response, get_today_hero_image_path
 from .db import get_db, init_db
@@ -29,6 +32,27 @@ logger = logging.getLogger("uvicorn.error")
 _BADGE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+def _merge_zoom_values(meeting_id: str, passcode: str, join_url: str) -> tuple[str, str]:
+  """Fill meeting/pass from join URL when missing."""
+  mid = meeting_id.strip()
+  pw = passcode.strip()
+  url = join_url.strip()
+  if not url or (mid and pw):
+    return mid, pw
+  parsed = urlparse(url)
+  if not mid:
+    segments = [s for s in parsed.path.split("/") if s]
+    for seg in reversed(segments):
+      digits = "".join(ch for ch in seg if ch.isdigit())
+      if len(digits) >= 9:
+        mid = digits
+        break
+  if not pw:
+    query = parse_qs(parsed.query)
+    pw = (query.get("pwd") or query.get("passcode") or [""])[0].strip()
+  return mid, pw
+
+
 def _parse_optional_member_id(raw: Optional[str]) -> Optional[int]:
   if raw is None or str(raw).strip() == "":
     return None
@@ -39,6 +63,10 @@ def _parse_optional_member_id(raw: Optional[str]) -> Optional[int]:
   if v < 1:
     raise HTTPException(status_code=400, detail="invalid member_id")
   return v
+
+
+def _member_display_name(name: str, role: str, goal: str) -> str:
+  return f"{name.strip()} {role.strip()} {goal.strip()}".strip()
 
 
 # In Docker we proxy via Nginx (no CORS needed). For local dev, this is permissive.
@@ -163,9 +191,10 @@ def create_checkin(payload: schemas.CheckInCreate, db: Session = Depends(get_db)
     nickname=nickname,
     requested_status="leave" if payload.status == "leave" else None,
     tz_name=tz_name,
-    normal_start=window["normal_start"],
-    normal_end=window["normal_end"],
-    late_end=window["late_end"],
+    morning_start=window["morning_start"],
+    morning_end=window["morning_end"],
+    night_start=window["night_start"],
+    night_end=window["night_end"],
   )
 
 
@@ -177,7 +206,7 @@ def list_members(db: Session = Depends(get_db)):
 @app.post("/api/members", response_model=schemas.MemberOut)
 def create_member(payload: schemas.MemberCreate, db: Session = Depends(get_db)):
   try:
-    return crud.create_member(db, name=payload.name)
+    return crud.create_member(db, name=payload.name, role=payload.role, goal=payload.goal)
   except ValueError as exc:
     raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -193,6 +222,18 @@ def get_checkin_window_config():
   app_env = os.getenv("APP_ENV", "local").strip().lower() or "local"
   source = str(resolve_checkin_config_path())
   return schemas.CheckinWindowConfigOut(**window, app_env=app_env, source=source)
+
+
+@app.get("/api/settings/zoom-join", response_model=schemas.ZoomJoinHintsOut)
+def get_zoom_join_hints():
+  """Manual Zoom join info from config, with env override."""
+  saved = load_zoom_join_settings()
+  env_mid = os.getenv("ZOOM_MEETING_ID", "").strip()
+  env_pw = os.getenv("ZOOM_PASSCODE", "").strip()
+  env_url = os.getenv("ZOOM_JOIN_URL", "").strip()
+  join_url = env_url or saved["join_url"]
+  mid, pw = _merge_zoom_values(env_mid or saved["meeting_id"], env_pw or saved["passcode"], join_url)
+  return schemas.ZoomJoinHintsOut(meeting_id=mid or None, passcode=pw or None, join_url=join_url or None)
 
 
 @app.get("/api/badges", response_model=list[schemas.AchievementBadgeOut])
@@ -227,7 +268,7 @@ async def create_badge(
     member = crud.get_active_member_by_id(db, mid)
     if member is None:
       raise HTTPException(status_code=400, detail="member not found or inactive")
-    resolved_nickname = member.name
+    resolved_nickname = _member_display_name(member.name, member.role, member.goal)
     resolved_member_id = member.id
   else:
     resolved_nickname = nickname.strip()
@@ -261,6 +302,61 @@ async def create_badge(
   return schemas.achievement_badge_to_out(row)
 
 
+@app.put("/api/badges/{badge_id}", response_model=schemas.AchievementBadgeOut)
+async def update_badge(
+  badge_id: int,
+  title: str = Form(...),
+  earned_date: str = Form(...),
+  nickname: str = Form(""),
+  member_id: Optional[str] = Form(None),
+  certificate: Optional[UploadFile] = File(None),
+  db: Session = Depends(get_db),
+):
+  title_clean = title.strip()
+  earned = earned_date.strip()
+  if not title_clean or not _BADGE_DATE.match(earned):
+    raise HTTPException(status_code=400, detail="invalid title or earned_date (use YYYY-MM-DD)")
+
+  mid = _parse_optional_member_id(member_id)
+  resolved_member_id: Optional[int] = None
+  resolved_nickname = ""
+  if mid is not None:
+    member = crud.get_active_member_by_id(db, mid)
+    if member is None:
+      raise HTTPException(status_code=400, detail="member not found or inactive")
+    resolved_nickname = _member_display_name(member.name, member.role, member.goal)
+    resolved_member_id = member.id
+  else:
+    resolved_nickname = nickname.strip()
+    if not resolved_nickname:
+      raise HTTPException(status_code=400, detail="nickname is required when member is not linked")
+
+  row = crud.update_badge(
+    db,
+    badge_id=badge_id,
+    nickname=resolved_nickname,
+    title=title_clean,
+    earned_date_local=earned,
+    member_id=resolved_member_id,
+  )
+  if row is None:
+    raise HTTPException(status_code=404, detail="badge not found")
+
+  if certificate and certificate.filename:
+    data = await certificate.read()
+    if not data:
+      raise HTTPException(status_code=400, detail="certificate image is empty")
+    try:
+      fname = save_certificate_image(badge_id=row.id, content_type=certificate.content_type, data=data)
+    except ValueError as exc:
+      raise HTTPException(status_code=400, detail=str(exc)) from exc
+    updated = crud.update_badge_certificate_filename(db, badge_id=row.id, filename=fname)
+    if updated is not None:
+      row = updated
+
+  return schemas.achievement_badge_to_out(row)
+
+
 @app.get("/api/badges/{badge_id}/certificate")
 def get_badge_certificate(badge_id: int, db: Session = Depends(get_db)):
   row = db.get(AchievementBadge, badge_id)
@@ -283,15 +379,31 @@ def delete_badge(badge_id: int, db: Session = Depends(get_db)):
 def update_checkin_window_config(payload: schemas.CheckinWindowConfig):
   try:
     saved = save_checkin_window_config(
-      normal_start=payload.normal_start,
-      normal_end=payload.normal_end,
-      late_end=payload.late_end,
+      morning_start=payload.morning_start,
+      morning_end=payload.morning_end,
+      night_start=payload.night_start,
+      night_end=payload.night_end,
     )
   except ValueError as exc:
     raise HTTPException(status_code=400, detail=str(exc)) from exc
   app_env = os.getenv("APP_ENV", "local").strip().lower() or "local"
   source = str(resolve_checkin_config_path())
   return schemas.CheckinWindowConfigOut(**saved, app_env=app_env, source=source)
+
+
+@app.put("/api/settings/zoom-join", response_model=schemas.ZoomJoinHintsOut)
+def update_zoom_join_hints(payload: schemas.ZoomJoinHintsIn):
+  saved = save_zoom_join_settings(
+    meeting_id=payload.meeting_id or "",
+    passcode=payload.passcode or "",
+    join_url=payload.join_url or "",
+  )
+  mid, pw = _merge_zoom_values(saved["meeting_id"], saved["passcode"], saved["join_url"])
+  return schemas.ZoomJoinHintsOut(
+    meeting_id=mid or None,
+    passcode=pw or None,
+    join_url=saved["join_url"] or None,
+  )
 
 
 def _normalize_status(raw: str) -> schemas.AttendanceStatus:

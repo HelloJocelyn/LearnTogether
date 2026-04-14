@@ -71,3 +71,30 @@ def init_db() -> None:
             text("ALTER TABLE achievement_badges ADD COLUMN certificate_image_filename TEXT")
           )
 
+    if "members" in insp.get_table_names():
+      m_cols = {c["name"] for c in insp.get_columns("members")}
+      if "role" not in m_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE members ADD COLUMN role TEXT NOT NULL DEFAULT ''"))
+      if "goal" not in m_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE members ADD COLUMN goal TEXT NOT NULL DEFAULT ''"))
+      # Backfill older rows where name stored all three parts.
+      with engine.begin() as conn:
+        rows = conn.execute(text("SELECT id, name, role, goal FROM members")).fetchall()
+        for row in rows:
+          name = str(row[1] or "").strip()
+          role = str(row[2] or "").strip()
+          goal = str(row[3] or "").strip()
+          if role and goal:
+            continue
+          parts = [p for p in name.split() if p]
+          if len(parts) >= 3:
+            new_name = parts[0]
+            new_role = parts[1]
+            new_goal = " ".join(parts[2:])
+            conn.execute(
+              text("UPDATE members SET name=:name, role=:role, goal=:goal WHERE id=:id"),
+              {"id": row[0], "name": new_name, "role": new_role, "goal": new_goal},
+            )
+
