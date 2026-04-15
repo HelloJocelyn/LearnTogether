@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
 import {
   getCheckinWindowConfig,
+  getStatisticsSettings,
   getZoomJoinHints,
   listCheckins,
   updateCheckinWindowConfig,
+  updateStatisticsSettings,
   updateZoomJoinHints,
   type CheckIn,
 } from '../api'
@@ -69,10 +71,19 @@ export default function Settings() {
   const [saved, setSaved] = useState<string | null>(null)
   const [zoomSaved, setZoomSaved] = useState<string | null>(null)
   const [outsideRows, setOutsideRows] = useState<CheckIn[]>([])
+  const [weeklyNoCheckinThreshold, setWeeklyNoCheckinThreshold] = useState(2)
+  const [statsEditing, setStatsEditing] = useState(false)
+  const [statsSaving, setStatsSaving] = useState(false)
+  const [statsSaved, setStatsSaved] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([getCheckinWindowConfig(), getZoomJoinHints(), listCheckins(500, false, { todayOnly: true })])
-      .then(([cfg, zoom, checkins]) => {
+    Promise.all([
+      getCheckinWindowConfig(),
+      getZoomJoinHints(),
+      getStatisticsSettings(),
+      listCheckins(500, false, { todayOnly: true }),
+    ])
+      .then(([cfg, zoom, stats, checkins]) => {
         setMorningStart(cfg.morning_start)
         setMorningEnd(cfg.morning_end)
         setNightStart(cfg.night_start)
@@ -80,6 +91,7 @@ export default function Settings() {
         setZoomMeetingId(zoom.meeting_id ?? '')
         setZoomPasscode(zoom.passcode ?? '')
         setZoomJoinUrl(zoom.join_url ?? '')
+        setWeeklyNoCheckinThreshold(stats.weekly_no_checkin_threshold)
         setOutsideRows(checkins.filter((c) => !c.is_real))
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
@@ -123,6 +135,21 @@ export default function Settings() {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setZoomSaving(false)
+    }
+  }
+
+  async function onSaveStatistics() {
+    setStatsSaving(true)
+    setError(null)
+    setStatsSaved(null)
+    try {
+      const saved = await updateStatisticsSettings(weeklyNoCheckinThreshold)
+      setWeeklyNoCheckinThreshold(saved.weekly_no_checkin_threshold)
+      setStatsSaved(t('settings.statisticsSaved'))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setStatsSaving(false)
     }
   }
 
@@ -255,6 +282,48 @@ export default function Settings() {
             </form>
           ) : null}
           {zoomSaved ? <p className="muted">{zoomSaved}</p> : null}
+          {error ? <p className="error">{error}</p> : null}
+        </section>
+
+        <section className="card settingsCard settingsPrimaryCard">
+          <div className="rowTop">
+            <h3 style={{ margin: 0 }}>{t('settings.statisticsTitle')}</h3>
+            <button
+              type="button"
+              className="secondary"
+              disabled={loading || statsSaving}
+              onClick={async () => {
+                if (!statsEditing) {
+                  setStatsEditing(true)
+                  return
+                }
+                await onSaveStatistics()
+                setStatsEditing(false)
+              }}
+            >
+              {statsSaving ? t('settings.saving') : statsEditing ? t('settings.statisticsSave') : t('settings.edit')}
+            </button>
+          </div>
+          <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
+            {t('settings.statisticsDesc')}
+          </p>
+          {!loading ? (
+            <form className="quickJoinForm" style={{ marginTop: 12 }}>
+              <label className="label">
+                {t('settings.weeklyNoCheckinThreshold')}
+                <input
+                  type="number"
+                  min={0}
+                  max={7}
+                  step={1}
+                  value={weeklyNoCheckinThreshold}
+                  onChange={(e) => setWeeklyNoCheckinThreshold(Number(e.target.value))}
+                  disabled={!statsEditing}
+                />
+              </label>
+            </form>
+          ) : null}
+          {statsSaved ? <p className="muted">{statsSaved}</p> : null}
           {error ? <p className="error">{error}</p> : null}
         </section>
 

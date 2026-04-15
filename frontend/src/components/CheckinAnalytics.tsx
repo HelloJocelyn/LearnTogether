@@ -1,13 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { listBadges, listCheckins, type AchievementBadge, type CheckIn } from '../api'
+import {
+  getStatisticsSettings,
+  listBadges,
+  listCheckins,
+  type AchievementBadge,
+  type CheckIn,
+} from '../api'
 import { useI18n } from '../i18n'
 
-type Tab = 'monthly' | 'yearly'
+type Tab = 'monthly' | 'weekly' | 'yearly'
+
+type Ymd = { y: number; m: number; day: number }
 type CheckinStatus = CheckIn['status']
 
 const tzDefault = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
 const statusOrder: CheckinStatus[] = ['morning', 'night', 'late', 'leave', 'outside']
+
+function defaultWeeklyNoCheckinThreshold(): number {
+  const raw = import.meta.env.VITE_STATS_WEEKLY_NO_CHECKIN_THRESHOLD as string | undefined
+  const n = raw !== undefined && raw !== '' ? Number(raw) : 2
+  return Number.isFinite(n) && n >= 0 ? n : 2
+}
 
 function normalizeStatusForStats(status: CheckinStatus): CheckinStatus {
   return status === 'normal' ? 'morning' : status
@@ -89,6 +103,58 @@ function getMonthLabel(year: number, month1Based: number) {
   return d.toLocaleString(undefined, { month: 'short' })
 }
 
+function mondayUtcOfCalendarWeek(y: number, m: number, d: number): Ymd {
+  const t = Date.UTC(y, m - 1, d)
+  const dow = new Date(t).getUTCDay()
+  const daysFromMon = (dow + 6) % 7
+  const monMs = t - daysFromMon * 86400000
+  const dt = new Date(monMs)
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, day: dt.getUTCDate() }
+}
+
+function addUtcCalendarDays(y: number, m: number, d: number, delta: number): Ymd {
+  const t = Date.UTC(y, m - 1, d + delta)
+  const dt = new Date(t)
+  return { y: dt.getUTCFullYear(), m: dt.getUTCMonth() + 1, day: dt.getUTCDate() }
+}
+
+function weekDayKeysFromMonday(mon: Ymd): string[] {
+  const keys: string[] = []
+  for (let i = 0; i < 7; i++) {
+    const p = addUtcCalendarDays(mon.y, mon.m, mon.day, i)
+    keys.push(dateKey(p.y, p.m, p.day))
+  }
+  return keys
+}
+
+function localeForStats(lang: 'en' | 'zh' | 'ja') {
+  if (lang === 'zh') return 'zh-CN'
+  if (lang === 'ja') return 'ja-JP'
+  return 'en-US'
+}
+
+function formatShortUtcDate(y: number, m: number, d: number, lang: 'en' | 'zh' | 'ja') {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(localeForStats(lang), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
+function weekRangeLabel(mon: Ymd, lang: 'en' | 'zh' | 'ja') {
+  const sun = addUtcCalendarDays(mon.y, mon.m, mon.day, 6)
+  return `${formatShortUtcDate(mon.y, mon.m, mon.day, lang)} – ${formatShortUtcDate(sun.y, sun.m, sun.day, lang)}`
+}
+
+function weekdayColumnLabel(y: number, m: number, d: number, lang: 'en' | 'zh' | 'ja') {
+  const wd = new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(localeForStats(lang), {
+    weekday: 'short',
+    timeZone: 'UTC',
+  })
+  return `${wd} ${d}`
+}
+
 function avatarFor(nickname: string) {
   // Keep this in sync with Home.tsx avatarFor.
   const trimmed = nickname.trim()
@@ -111,8 +177,8 @@ function avatarFor(nickname: string) {
 }
 
 export default function CheckinAnalytics() {
-  const { t } = useI18n()
-  const [tab, setTab] = useState<Tab>('monthly')
+  const { t, lang } = useI18n()
+  const [tab, setTab] = useState<Tab>('weekly')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [checkins, setCheckins] = useState<CheckIn[]>([])
@@ -127,6 +193,22 @@ export default function CheckinAnalytics() {
 
   const [selectedYear, setSelectedYear] = useState(defaultYear)
   const [selectedMonth, setSelectedMonth] = useState(defaultMonth)
+  const [weekMonday, setWeekMonday] = useState<Ymd>(() => {
+    const p = getTzYMDParts(new Date(), tzDefault)
+    return mondayUtcOfCalendarWeek(p.y, p.m, p.day)
+  })
+  const [noCheckinAlertThreshold, setNoCheckinAlertThreshold] = useState(defaultWeeklyNoCheckinThreshold)
+
+  useEffect(() => {
+    function loadThreshold() {
+      getStatisticsSettings()
+        .then((s) => setNoCheckinAlertThreshold(s.weekly_no_checkin_threshold))
+        .catch(() => {})
+    }
+    loadThreshold()
+    window.addEventListener('focus', loadThreshold)
+    return () => window.removeEventListener('focus', loadThreshold)
+  }, [])
 
   useEffect(() => {
     // Backend treats end_date as an exclusive upper bound (start of that local day).
@@ -236,6 +318,8 @@ export default function CheckinAnalytics() {
       string,
       { morning: number; night: number; late: number; leave: number; total: number }
     >()
+    const checkinDaysByUser = new Map<string, Set<string>>()
+    const badgeDaysByUser = new Map<string, Set<string>>()
     for (const c of checkins) {
       const p = getCheckinYMD(c, tz)
       if (p.y !== selectedYear || p.m !== selectedMonth) continue
@@ -246,11 +330,111 @@ export default function CheckinAnalytics() {
       if (c.status === 'leave') cur.leave += 1
       cur.total += 1
       byUser.set(c.nickname, cur)
+      const dk = dateKey(p.y, p.m, p.day)
+      const s = checkinDaysByUser.get(c.nickname) ?? new Set()
+      s.add(dk)
+      checkinDaysByUser.set(c.nickname, s)
+    }
+    for (const b of badges) {
+      const p = parseDateKey(b.earned_date_local)
+      if (!p || p.y !== selectedYear || p.m !== selectedMonth) continue
+      const dk = dateKey(p.y, p.m, p.day)
+      const s = badgeDaysByUser.get(b.nickname) ?? new Set()
+      s.add(dk)
+      badgeDaysByUser.set(b.nickname, s)
+    }
+    const monthIndex0 = selectedMonth - 1
+    const daysInMonth = new Date(Date.UTC(selectedYear, monthIndex0 + 1, 0)).getUTCDate()
+    return Array.from(byUser.entries())
+      .map(([nickname, counts]) => {
+        let noCheckin = 0
+        const hasCheckin = checkinDaysByUser.get(nickname) ?? new Set()
+        const hasBadge = badgeDaysByUser.get(nickname) ?? new Set()
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dk = dateKey(selectedYear, selectedMonth, d)
+          if (!hasCheckin.has(dk) && !hasBadge.has(dk)) noCheckin += 1
+        }
+        return { nickname, ...counts, noCheckin }
+      })
+      .sort((a, b) => a.nickname.localeCompare(b.nickname))
+  }, [badges, checkins, selectedMonth, selectedYear, tz])
+
+  const weeklyMatrix = useMemo(() => {
+    const dayKeys = weekDayKeysFromMonday(weekMonday)
+    const keySet = new Set(dayKeys)
+    const usersSet = new Set<string>()
+    const statusByUserDay = new Map<string, Map<string, CheckinStatus>>()
+    for (const c of checkins) {
+      const p = getCheckinYMD(c, tz)
+      const dKey = dateKey(p.y, p.m, p.day)
+      if (!keySet.has(dKey)) continue
+      usersSet.add(c.nickname)
+      const userMap = statusByUserDay.get(c.nickname) ?? new Map()
+      userMap.set(dKey, pickDominantStatus(userMap.get(dKey), normalizeStatusForStats(c.status)))
+      statusByUserDay.set(c.nickname, userMap)
+    }
+    const badgesByUserDay = new Map<string, Map<string, AchievementBadge[]>>()
+    for (const b of badges) {
+      const p = parseDateKey(b.earned_date_local)
+      if (!p) continue
+      const dKey = dateKey(p.y, p.m, p.day)
+      if (!keySet.has(dKey)) continue
+      usersSet.add(b.nickname)
+      const userMap = badgesByUserDay.get(b.nickname) ?? new Map()
+      const arr = userMap.get(dKey) ?? []
+      arr.push(b)
+      userMap.set(dKey, arr)
+      badgesByUserDay.set(b.nickname, userMap)
+    }
+    const users = Array.from(usersSet).sort()
+    return { users, dayKeys, statusByUserDay, badgesByUserDay }
+  }, [badges, checkins, weekMonday, tz])
+
+  const weeklyMemberSummary = useMemo(() => {
+    const dayKeys = weekDayKeysFromMonday(weekMonday)
+    const keySet = new Set(dayKeys)
+    const byUser = new Map<
+      string,
+      { morning: number; night: number; late: number; leave: number; total: number }
+    >()
+    const checkinDaysByUser = new Map<string, Set<string>>()
+    const badgeDaysByUser = new Map<string, Set<string>>()
+    for (const c of checkins) {
+      const p = getCheckinYMD(c, tz)
+      const dk = dateKey(p.y, p.m, p.day)
+      if (!keySet.has(dk)) continue
+      const cur = byUser.get(c.nickname) ?? { morning: 0, night: 0, late: 0, leave: 0, total: 0 }
+      if (c.status === 'morning' || c.status === 'normal') cur.morning += 1
+      if (c.status === 'night') cur.night += 1
+      if (c.status === 'late') cur.late += 1
+      if (c.status === 'leave') cur.leave += 1
+      cur.total += 1
+      byUser.set(c.nickname, cur)
+      const s = checkinDaysByUser.get(c.nickname) ?? new Set()
+      s.add(dk)
+      checkinDaysByUser.set(c.nickname, s)
+    }
+    for (const b of badges) {
+      const p = parseDateKey(b.earned_date_local)
+      if (!p) continue
+      const dk = dateKey(p.y, p.m, p.day)
+      if (!keySet.has(dk)) continue
+      const s = badgeDaysByUser.get(b.nickname) ?? new Set()
+      s.add(dk)
+      badgeDaysByUser.set(b.nickname, s)
     }
     return Array.from(byUser.entries())
-      .map(([nickname, counts]) => ({ nickname, ...counts }))
+      .map(([nickname, counts]) => {
+        let noCheckin = 0
+        const hasCheckin = checkinDaysByUser.get(nickname) ?? new Set()
+        const hasBadge = badgeDaysByUser.get(nickname) ?? new Set()
+        for (const dk of dayKeys) {
+          if (!hasCheckin.has(dk) && !hasBadge.has(dk)) noCheckin += 1
+        }
+        return { nickname, ...counts, noCheckin }
+      })
       .sort((a, b) => a.nickname.localeCompare(b.nickname))
-  }, [checkins, selectedMonth, selectedYear, tz])
+  }, [badges, checkins, weekMonday, tz])
 
   const availableYears = useMemo(() => {
     const s = new Set<number>()
@@ -273,6 +457,9 @@ export default function CheckinAnalytics() {
         <h2 style={{ marginBottom: 0 }}>{t('stats.title')}</h2>
         <div className="analyticsControls">
           <div className="tabs">
+            <button type="button" className={tab === 'weekly' ? 'tabActive' : ''} onClick={() => setTab('weekly')}>
+              {t('stats.weekly')}
+            </button>
             <button type="button" className={tab === 'monthly' ? 'tabActive' : ''} onClick={() => setTab('monthly')}>
               {t('stats.monthly')}
             </button>
@@ -282,16 +469,18 @@ export default function CheckinAnalytics() {
           </div>
 
           <div className="filters">
-            <label className="label">
-              {t('stats.year')}
-              <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
-                {availableYears.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {tab !== 'weekly' ? (
+              <label className="label">
+                {t('stats.year')}
+                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))}>
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
 
             {tab === 'monthly' ? (
               <label className="label">
@@ -308,6 +497,26 @@ export default function CheckinAnalytics() {
                 </select>
               </label>
             ) : null}
+
+            {tab === 'weekly' ? (
+              <div className="weekNav">
+                <button
+                  type="button"
+                  title={t('stats.weekPrev')}
+                  onClick={() => setWeekMonday((w) => addUtcCalendarDays(w.y, w.m, w.day, -7))}
+                >
+                  ‹
+                </button>
+                <span className="weekNavLabel">{weekRangeLabel(weekMonday, lang)}</span>
+                <button
+                  type="button"
+                  title={t('stats.weekNext')}
+                  onClick={() => setWeekMonday((w) => addUtcCalendarDays(w.y, w.m, w.day, 7))}
+                >
+                  ›
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -315,25 +524,160 @@ export default function CheckinAnalytics() {
       {error ? <p className="error">{error}</p> : null}
       {loading ? <p className="muted">{t('stats.loading')}</p> : null}
 
-      {!loading && !error && tab === 'yearly' ? (
-        <div className="yearGrid">
-          {yearlyData.map((m) => (
-            <div key={m.monthKey} className="yearTile">
-              <div className="yearMonth">{getMonthLabel(selectedYear, Number(m.monthKey.slice(5, 7)))}</div>
-              <div className="yearCounts">
-                {statusOrder.map((status) => (
-                  <span key={status} title={t(`stats.status.${status}`)}>
-                    <span className={`dot ${status}Dot`} /> {m.counts[status]}
-                  </span>
-                ))}
+      {!loading && !error && tab === 'weekly' ? (
+        <div className="matrixWrap">
+          <details className="memberMonthSummary" open={false}>
+            <summary className="memberMonthSummaryTitle memberMonthSummaryToggle">
+              {t('stats.memberWeeklySummaryTitle', { range: weekRangeLabel(weekMonday, lang) })}
+            </summary>
+            <p className="muted statsWeeklyThresholdHint">
+              {t('stats.weeklyNoCheckinThresholdHint', { threshold: noCheckinAlertThreshold })}
+            </p>
+            {weeklyMemberSummary.length === 0 ? (
+              <p className="muted">{t('stats.memberWeeklySummaryEmpty')}</p>
+            ) : (
+              <div className="memberMonthSummaryTableWrap">
+                <table className="memberMonthSummaryTable">
+                  <thead>
+                    <tr>
+                      <th>{t('stats.users')}</th>
+                      <th>{t('stats.status.morning')}</th>
+                      <th>{t('stats.status.night')}</th>
+                      <th>{t('stats.status.late')}</th>
+                      <th>{t('stats.status.leave')}</th>
+                      <th>{t('stats.noCheckin')}</th>
+                      <th>{t('stats.memberMonthlySummaryTotal')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {weeklyMemberSummary.map((row) => (
+                      <tr
+                        key={row.nickname}
+                        className={
+                          row.noCheckin > noCheckinAlertThreshold ? 'weeklyNoCheckinHighlight' : undefined
+                        }
+                      >
+                        <td>{row.nickname}</td>
+                        <td>{row.morning}</td>
+                        <td>{row.night}</td>
+                        <td>{row.late}</td>
+                        <td>{row.leave}</td>
+                        <td>{row.noCheckin}</td>
+                        <td>{row.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              {m.badgeCount > 0 ? (
-                <div className="yearBadgeRow muted">
-                  {t('stats.badgesCountShort', { count: m.badgeCount })}
-                </div>
-              ) : null}
+            )}
+          </details>
+
+          <div className="matrixLegend">
+            <span className="legendItem">
+              <span className="legendChip morningChip" /> {t('stats.status.morning')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip nightChip" /> {t('stats.status.night')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip lateChip" /> {t('stats.status.late')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip leaveChip" /> {t('stats.status.leave')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip outsideChip" /> {t('stats.status.outside')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip emptyChip" /> {t('stats.noCheckin')}
+            </span>
+            <span className="legendItem">
+              <span className="legendChip badgeChip" /> {t('stats.badgeLegend')}
+            </span>
+          </div>
+
+          <div className="matrixScroll">
+            <div className="matrix">
+              <div
+                className="matrixHeaderRow"
+                style={{
+                  gridTemplateColumns: `160px repeat(${weeklyMatrix.dayKeys.length}, minmax(0, 1fr))`,
+                }}
+              >
+                <div className="matrixUserHeader">{t('stats.users')}</div>
+                {weeklyMatrix.dayKeys.map((dk) => {
+                  const parsed = parseDateKey(dk)
+                  const label = parsed ? weekdayColumnLabel(parsed.y, parsed.m, parsed.day, lang) : dk
+                  return (
+                    <div key={dk} className="matrixDayHeader">
+                      {label}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {weeklyMatrix.users.map((u) => {
+                const av = avatarFor(u)
+                const userMap = weeklyMatrix.statusByUserDay.get(u)
+                const badgeMap = weeklyMatrix.badgesByUserDay.get(u)
+                return (
+                  <div
+                    key={u}
+                    className="matrixUserRow"
+                    style={{
+                      gridTemplateColumns: `160px repeat(${weeklyMatrix.dayKeys.length}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    <div className="matrixUserCell">
+                      <span className="avatarMini" style={{ background: av.bg }}>
+                        {av.initials}
+                      </span>
+                      <span className="userName" title={u}>
+                        {u}
+                      </span>
+                    </div>
+
+                    {weeklyMatrix.dayKeys.map((dk) => {
+                      const st = userMap?.get(dk)
+                      const badgeList = badgeMap?.get(dk) ?? []
+                      const badgeTitles = badgeList.map((x) => x.title).join(', ')
+                      const badgeTitle =
+                        badgeList.length > 0
+                          ? `${t('stats.badgeTooltip')}: ${badgeTitles}`
+                          : ''
+                      if (!st && badgeList.length === 0) {
+                        return (
+                          <div key={dk} className="cell empty" aria-label={t('stats.noCheckin')}>
+                            <span className="cellInner" />
+                          </div>
+                        )
+                      }
+                      const titleParts = [st ? t(`stats.status.${st}`) : '', badgeTitle].filter(Boolean)
+                      const badgeOnly = !st && badgeList.length > 0
+                      const cellKind = st ?? (badgeOnly ? 'badgeOnly' : 'empty')
+                      const showMedalInside = badgeOnly
+                      return (
+                        <div
+                          key={dk}
+                          className={`cell ${cellKind} ${badgeList.length > 0 ? 'hasBadge' : ''}`}
+                          title={titleParts.join(' · ')}
+                          aria-label={titleParts.join(' · ')}
+                        >
+                          <span className="cellInner">
+                            {showMedalInside
+                              ? badgeList.length > 1
+                                ? String(badgeList.length)
+                                : '🏅'
+                              : ''}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
             </div>
-          ))}
+          </div>
         </div>
       ) : null}
 
@@ -358,6 +702,7 @@ export default function CheckinAnalytics() {
                       <th>{t('stats.status.night')}</th>
                       <th>{t('stats.status.late')}</th>
                       <th>{t('stats.status.leave')}</th>
+                      <th>{t('stats.noCheckin')}</th>
                       <th>{t('stats.memberMonthlySummaryTotal')}</th>
                     </tr>
                   </thead>
@@ -369,6 +714,7 @@ export default function CheckinAnalytics() {
                         <td>{row.night}</td>
                         <td>{row.late}</td>
                         <td>{row.leave}</td>
+                        <td>{row.noCheckin}</td>
                         <td>{row.total}</td>
                       </tr>
                     ))}
@@ -481,6 +827,28 @@ export default function CheckinAnalytics() {
               })}
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {!loading && !error && tab === 'yearly' ? (
+        <div className="yearGrid">
+          {yearlyData.map((m) => (
+            <div key={m.monthKey} className="yearTile">
+              <div className="yearMonth">{getMonthLabel(selectedYear, Number(m.monthKey.slice(5, 7)))}</div>
+              <div className="yearCounts">
+                {statusOrder.map((status) => (
+                  <span key={status} title={t(`stats.status.${status}`)}>
+                    <span className={`dot ${status}Dot`} /> {m.counts[status]}
+                  </span>
+                ))}
+              </div>
+              {m.badgeCount > 0 ? (
+                <div className="yearBadgeRow muted">
+                  {t('stats.badgesCountShort', { count: m.badgeCount })}
+                </div>
+              ) : null}
+            </div>
+          ))}
         </div>
       ) : null}
     </section>

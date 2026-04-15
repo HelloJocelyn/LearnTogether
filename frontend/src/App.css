@@ -857,6 +857,34 @@ button.secondary {
   justify-content: end;
 }
 
+.weekNav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.weekNavLabel {
+  font-size: 14px;
+  opacity: 0.95;
+  text-align: center;
+  min-width: 10rem;
+}
+
+.weekNav button {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.weekNav button:hover {
+  border-color: var(--accent-border);
+}
+
 .label {
   display: grid;
   gap: 6px;
@@ -1050,6 +1078,17 @@ button.secondary {
 
 .memberMonthSummaryTable tbody tr:last-child td {
   border-bottom: none;
+}
+
+.statsWeeklyThresholdHint {
+  font-size: 13px;
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.memberMonthSummaryTable tbody tr.weeklyNoCheckinHighlight td {
+  background: rgba(245, 158, 11, 0.14);
+  box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.85);
 }
 
 .matrixLegend {

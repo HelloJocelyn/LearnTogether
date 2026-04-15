@@ -149,3 +149,28 @@ def save_zoom_join_settings(*, meeting_id: str, passcode: str, join_url: str) ->
     "passcode": payload["zoom_passcode"],
     "join_url": payload["zoom_join_url"],
   }
+
+
+DEFAULT_WEEKLY_NO_CHECKIN_THRESHOLD = 2
+
+
+def load_statistics_settings() -> dict[str, int]:
+  raw = _read_raw_config(resolve_checkin_config_path())
+  v = raw.get("weekly_no_checkin_threshold", DEFAULT_WEEKLY_NO_CHECKIN_THRESHOLD)
+  try:
+    n = int(v)
+  except (TypeError, ValueError):
+    n = DEFAULT_WEEKLY_NO_CHECKIN_THRESHOLD
+  n = max(0, min(7, n))
+  return {"weekly_no_checkin_threshold": n}
+
+
+def save_statistics_settings(*, weekly_no_checkin_threshold: int) -> dict[str, int]:
+  n = int(weekly_no_checkin_threshold)
+  if n < 0 or n > 7:
+    raise ValueError("weekly_no_checkin_threshold must be between 0 and 7")
+  config_path = resolve_checkin_config_path()
+  raw = _read_raw_config(config_path)
+  raw["weekly_no_checkin_threshold"] = n
+  _write_raw_config(config_path, raw)
+  return {"weekly_no_checkin_threshold": n}

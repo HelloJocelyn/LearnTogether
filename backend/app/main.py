@@ -16,9 +16,11 @@ from . import crud, schemas
 from .badge_storage import path_for_stored_filename, save_certificate_image
 from .checkin_config import (
   load_checkin_window_config,
+  load_statistics_settings,
   load_zoom_join_settings,
   resolve_checkin_config_path,
   save_checkin_window_config,
+  save_statistics_settings,
   save_zoom_join_settings,
 )
 from .daily_hero_service import get_daily_hero_response, get_today_hero_image_path
@@ -222,6 +224,20 @@ def get_checkin_window_config():
   app_env = os.getenv("APP_ENV", "local").strip().lower() or "local"
   source = str(resolve_checkin_config_path())
   return schemas.CheckinWindowConfigOut(**window, app_env=app_env, source=source)
+
+
+@app.get("/api/settings/statistics", response_model=schemas.StatisticsSettingsOut)
+def get_statistics_settings():
+  return schemas.StatisticsSettingsOut(**load_statistics_settings())
+
+
+@app.put("/api/settings/statistics", response_model=schemas.StatisticsSettingsOut)
+def update_statistics_settings(payload: schemas.StatisticsSettingsIn):
+  try:
+    saved = save_statistics_settings(weekly_no_checkin_threshold=payload.weekly_no_checkin_threshold)
+  except ValueError as exc:
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
+  return schemas.StatisticsSettingsOut(**saved)
 
 
 @app.get("/api/settings/zoom-join", response_model=schemas.ZoomJoinHintsOut)

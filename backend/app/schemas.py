@@ -125,6 +125,14 @@ class ZoomJoinHintsIn(BaseModel):
   join_url: Optional[str] = None
 
 
+class StatisticsSettingsOut(BaseModel):
+  weekly_no_checkin_threshold: int = Field(ge=0, le=7)
+
+
+class StatisticsSettingsIn(BaseModel):
+  weekly_no_checkin_threshold: int = Field(ge=0, le=7)
+
+
 class DailyHeroOut(BaseModel):
   date: str
   theme: Optional[str] = None

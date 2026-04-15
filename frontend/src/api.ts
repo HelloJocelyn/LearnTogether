@@ -188,6 +188,21 @@ export type ZoomJoinHints = {
   join_url: string | null
 }
 
+export type StatisticsSettings = {
+  weekly_no_checkin_threshold: number
+}
+
+export function getStatisticsSettings() {
+  return request<StatisticsSettings>('/api/settings/statistics')
+}
+
+export function updateStatisticsSettings(weeklyNoCheckinThreshold: number) {
+  return request<StatisticsSettings>('/api/settings/statistics', {
+    method: 'PUT',
+    body: JSON.stringify({ weekly_no_checkin_threshold: weeklyNoCheckinThreshold }),
+  })
+}
+
 export function getZoomJoinHints() {
   return request<ZoomJoinHints>('/api/settings/zoom-join')
 }

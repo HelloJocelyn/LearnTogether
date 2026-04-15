@@ -35,6 +35,8 @@ echo "Updating backend dependencies..."
 backend/.venv/bin/pip install --upgrade pip
 backend/.venv/bin/pip install -r backend/requirements.txt
 
+LEARNTOGETHER_ROOT="$SCRIPT_DIR" bash "${SCRIPT_DIR}/scripts/db-migrate.sh"
+
 echo "Building frontend..."
 cd "$SCRIPT_DIR/frontend"
 npm install

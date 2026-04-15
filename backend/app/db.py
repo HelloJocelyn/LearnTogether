@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -80,21 +81,25 @@ def init_db() -> None:
         with engine.begin() as conn:
           conn.execute(text("ALTER TABLE members ADD COLUMN goal TEXT NOT NULL DEFAULT ''"))
       # Backfill older rows where name stored all three parts.
-      with engine.begin() as conn:
+      with engine.connect() as conn:
         rows = conn.execute(text("SELECT id, name, role, goal FROM members")).fetchall()
-        for row in rows:
-          name = str(row[1] or "").strip()
-          role = str(row[2] or "").strip()
-          goal = str(row[3] or "").strip()
-          if role and goal:
-            continue
-          parts = [p for p in name.split() if p]
-          if len(parts) >= 3:
-            new_name = parts[0]
-            new_role = parts[1]
-            new_goal = " ".join(parts[2:])
-            conn.execute(
-              text("UPDATE members SET name=:name, role=:role, goal=:goal WHERE id=:id"),
-              {"id": row[0], "name": new_name, "role": new_role, "goal": new_goal},
-            )
+      for row in rows:
+        name = str(row[1] or "").strip()
+        role = str(row[2] or "").strip()
+        goal = str(row[3] or "").strip()
+        if role and goal:
+          continue
+        parts = [p for p in name.split() if p]
+        if len(parts) >= 3:
+          new_name = parts[0]
+          new_role = parts[1]
+          new_goal = " ".join(parts[2:])
+          try:
+            with engine.begin() as upd:
+              upd.execute(
+                text("UPDATE members SET name=:name, role=:role, goal=:goal WHERE id=:id"),
+                {"id": row[0], "name": new_name, "role": new_role, "goal": new_goal},
+              )
+          except IntegrityError:
+            pass
 

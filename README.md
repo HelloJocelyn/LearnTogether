@@ -32,8 +32,11 @@ What it does:
 - Creates `.env.ec2` on first run (default `CHECKIN_TZ=Asia/Tokyo`)
 - Pulls latest `main`
 - Creates backend virtualenv and installs Python dependencies
+- Runs SQLite schema migration via [`scripts/db-migrate.sh`](scripts/db-migrate.sh) (backs up `backend/app.db` first)
 - Builds frontend static files
 - Configures `systemd` backend service and Nginx reverse proxy (`/api` -> backend)
+
+To run the same migration on another machine (or locally), use `bash scripts/db-migrate.sh` from the repo root after `backend/.venv` exists; see comments in that file for `APP_ENV` / `CHECKIN_CONFIG_FILE` overrides.
 
 After deploy:
 
@@ -54,7 +57,7 @@ After the first deployment, use this one-command update script:
 bash update-ec2.sh
 ```
 
-It will pull latest code, rebuild frontend, refresh backend dependencies, and restart services.
+It will pull latest code, refresh backend dependencies, run `scripts/db-migrate.sh`, rebuild frontend, and restart services.
 
 ## QR join + Zoom redirect
 
