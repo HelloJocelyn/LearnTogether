@@ -747,7 +747,27 @@ button.secondary {
 }
 
 .settingsPrimaryCard {
-  height: min(58vh, 560px);
+  height: auto;
+  align-self: start;
+}
+
+.settingsCard .quickJoinForm {
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.settingsCard .settingsTimePairRow {
+  gap: 8px;
+}
+
+.settingsCard .label {
+  gap: 4px;
+  font-size: 13px;
+}
+
+.settingsCard input,
+.settingsCard select {
+  padding: 7px 10px;
 }
 
 .settingsOutsideCard {

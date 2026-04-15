@@ -133,6 +133,14 @@ class StatisticsSettingsIn(BaseModel):
   weekly_no_checkin_threshold: int = Field(ge=0, le=7)
 
 
+class DailyHeroSettingsOut(BaseModel):
+  daily_hero_openai_api_key_set: bool
+
+
+class DailyHeroSettingsIn(BaseModel):
+  daily_hero_openai_api_key: str = ""
+
+
 class DailyHeroOut(BaseModel):
   date: str
   theme: Optional[str] = None

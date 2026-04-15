@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
 import {
   getCheckinWindowConfig,
+  getDailyHeroSettings,
   getStatisticsSettings,
   getZoomJoinHints,
   listCheckins,
   updateCheckinWindowConfig,
+  updateDailyHeroSettings,
   updateStatisticsSettings,
   updateZoomJoinHints,
   type CheckIn,
@@ -67,6 +69,11 @@ export default function Settings() {
   const [zoomSaving, setZoomSaving] = useState(false)
   const [windowEditing, setWindowEditing] = useState(false)
   const [zoomEditing, setZoomEditing] = useState(false)
+  const [dailyHeroApiKey, setDailyHeroApiKey] = useState('')
+  const [dailyHeroKeySet, setDailyHeroKeySet] = useState(false)
+  const [dailyHeroEditing, setDailyHeroEditing] = useState(false)
+  const [dailyHeroSaving, setDailyHeroSaving] = useState(false)
+  const [dailyHeroSaved, setDailyHeroSaved] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   const [zoomSaved, setZoomSaved] = useState<string | null>(null)
@@ -80,10 +87,11 @@ export default function Settings() {
     Promise.all([
       getCheckinWindowConfig(),
       getZoomJoinHints(),
+      getDailyHeroSettings(),
       getStatisticsSettings(),
       listCheckins(500, false, { todayOnly: true }),
     ])
-      .then(([cfg, zoom, stats, checkins]) => {
+      .then(([cfg, zoom, dailyHero, stats, checkins]) => {
         setMorningStart(cfg.morning_start)
         setMorningEnd(cfg.morning_end)
         setNightStart(cfg.night_start)
@@ -91,6 +99,8 @@ export default function Settings() {
         setZoomMeetingId(zoom.meeting_id ?? '')
         setZoomPasscode(zoom.passcode ?? '')
         setZoomJoinUrl(zoom.join_url ?? '')
+        setDailyHeroKeySet(dailyHero.daily_hero_openai_api_key_set)
+        setDailyHeroApiKey('')
         setWeeklyNoCheckinThreshold(stats.weekly_no_checkin_threshold)
         setOutsideRows(checkins.filter((c) => !c.is_real))
       })
@@ -138,6 +148,43 @@ export default function Settings() {
     }
   }
 
+  async function onSaveDailyHero() {
+    const trimmed = dailyHeroApiKey.trim()
+    if (!trimmed) {
+      setDailyHeroSaved(t('settings.dailyHeroNothingToSave'))
+      return
+    }
+    setDailyHeroSaving(true)
+    setError(null)
+    setDailyHeroSaved(null)
+    try {
+      const saved = await updateDailyHeroSettings(trimmed)
+      setDailyHeroKeySet(saved.daily_hero_openai_api_key_set)
+      setDailyHeroApiKey('')
+      setDailyHeroSaved(t('settings.dailyHeroSaved'))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDailyHeroSaving(false)
+    }
+  }
+
+  async function onClearDailyHeroKeyFromFile() {
+    setDailyHeroSaving(true)
+    setError(null)
+    setDailyHeroSaved(null)
+    try {
+      const saved = await updateDailyHeroSettings('')
+      setDailyHeroKeySet(saved.daily_hero_openai_api_key_set)
+      setDailyHeroApiKey('')
+      setDailyHeroSaved(t('settings.dailyHeroCleared'))
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDailyHeroSaving(false)
+    }
+  }
+
   async function onSaveStatistics() {
     setStatsSaving(true)
     setError(null)
@@ -177,7 +224,7 @@ export default function Settings() {
           </div>
           {loading ? <p className="muted">{t('settings.loadingConfig')}</p> : null}
           {!loading ? (
-            <form className="quickJoinForm" style={{ marginTop: 12 }}>
+            <form className="quickJoinForm">
               <div className="settingsTimePairRow">
                 <label className="label">
                   {t('settings.morningStart')}
@@ -248,7 +295,7 @@ export default function Settings() {
             </button>
           </div>
           {!loading ? (
-            <form className="quickJoinForm" style={{ marginTop: 12 }}>
+            <form className="quickJoinForm">
               <label className="label">
                 {t('settings.zoomMeetingId')}
                 <input
@@ -287,6 +334,59 @@ export default function Settings() {
 
         <section className="card settingsCard settingsPrimaryCard">
           <div className="rowTop">
+            <h3 style={{ margin: 0 }}>{t('settings.dailyHeroTitle')}</h3>
+            <button
+              type="button"
+              className="secondary"
+              disabled={loading || dailyHeroSaving}
+              onClick={async () => {
+                if (!dailyHeroEditing) {
+                  setDailyHeroEditing(true)
+                  return
+                }
+                await onSaveDailyHero()
+                setDailyHeroEditing(false)
+              }}
+            >
+              {dailyHeroSaving ? t('settings.saving') : dailyHeroEditing ? t('settings.dailyHeroSave') : t('settings.edit')}
+            </button>
+          </div>
+          <p className="muted" style={{ marginTop: 8, marginBottom: 0, fontSize: 13 }}>
+            {t('settings.dailyHeroHint')}
+          </p>
+          {!loading ? (
+            <form className="quickJoinForm">
+              <label className="label">
+                {t('settings.dailyHeroApiKey')}
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={dailyHeroApiKey}
+                  onChange={(e) => setDailyHeroApiKey(e.target.value)}
+                  disabled={!dailyHeroEditing}
+                  placeholder={
+                    dailyHeroKeySet ? t('settings.dailyHeroPlaceholderSet') : t('settings.dailyHeroPlaceholderEmpty')
+                  }
+                />
+              </label>
+              {dailyHeroEditing ? (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={dailyHeroSaving}
+                  onClick={() => void onClearDailyHeroKeyFromFile()}
+                >
+                  {t('settings.dailyHeroClearFromFile')}
+                </button>
+              ) : null}
+            </form>
+          ) : null}
+          {dailyHeroSaved ? <p className="muted">{dailyHeroSaved}</p> : null}
+          {error ? <p className="error">{error}</p> : null}
+        </section>
+
+        <section className="card settingsCard settingsPrimaryCard">
+          <div className="rowTop">
             <h3 style={{ margin: 0 }}>{t('settings.statisticsTitle')}</h3>
             <button
               type="button"
@@ -304,13 +404,10 @@ export default function Settings() {
               {statsSaving ? t('settings.saving') : statsEditing ? t('settings.statisticsSave') : t('settings.edit')}
             </button>
           </div>
-          <p className="muted" style={{ marginTop: 8, marginBottom: 0 }}>
-            {t('settings.statisticsDesc')}
-          </p>
           {!loading ? (
-            <form className="quickJoinForm" style={{ marginTop: 12 }}>
+            <form className="quickJoinForm">
               <label className="label">
-                {t('settings.weeklyNoCheckinThreshold')}
+                <span className="muted">0–7</span>
                 <input
                   type="number"
                   min={0}
@@ -319,6 +416,7 @@ export default function Settings() {
                   value={weeklyNoCheckinThreshold}
                   onChange={(e) => setWeeklyNoCheckinThreshold(Number(e.target.value))}
                   disabled={!statsEditing}
+                  aria-label={t('settings.statisticsTitle')}
                 />
               </label>
             </form>

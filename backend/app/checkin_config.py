@@ -174,3 +174,31 @@ def save_statistics_settings(*, weekly_no_checkin_threshold: int) -> dict[str, i
   raw["weekly_no_checkin_threshold"] = n
   _write_raw_config(config_path, raw)
   return {"weekly_no_checkin_threshold": n}
+
+
+DAILY_HERO_OPENAI_KEY_FIELD = "daily_hero_openai_api_key"
+
+
+def resolve_daily_hero_openai_api_key() -> str:
+  """Prefer ``OPENAI_API_KEY`` env; if unset, use ``daily_hero_openai_api_key`` in check-in config JSON."""
+  env_key = os.getenv("OPENAI_API_KEY", "").strip()
+  if env_key:
+    return env_key
+  raw = _read_raw_config(resolve_checkin_config_path())
+  return str(raw.get(DAILY_HERO_OPENAI_KEY_FIELD, "")).strip()
+
+
+def load_daily_hero_settings() -> dict[str, bool]:
+  return {"daily_hero_openai_api_key_set": bool(resolve_daily_hero_openai_api_key())}
+
+
+def save_daily_hero_settings(*, daily_hero_openai_api_key: str) -> None:
+  """Store key in config file, or remove key when ``daily_hero_openai_api_key`` is empty."""
+  config_path = resolve_checkin_config_path()
+  raw = _read_raw_config(config_path)
+  key = daily_hero_openai_api_key.strip()
+  if key:
+    raw[DAILY_HERO_OPENAI_KEY_FIELD] = key
+  else:
+    raw.pop(DAILY_HERO_OPENAI_KEY_FIELD, None)
+  _write_raw_config(config_path, raw)

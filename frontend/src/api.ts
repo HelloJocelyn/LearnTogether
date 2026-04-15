@@ -203,6 +203,21 @@ export function updateStatisticsSettings(weeklyNoCheckinThreshold: number) {
   })
 }
 
+export type DailyHeroSettings = {
+  daily_hero_openai_api_key_set: boolean
+}
+
+export function getDailyHeroSettings() {
+  return request<DailyHeroSettings>('/api/settings/daily-hero')
+}
+
+export function updateDailyHeroSettings(dailyHeroOpenaiApiKey: string) {
+  return request<DailyHeroSettings>('/api/settings/daily-hero', {
+    method: 'PUT',
+    body: JSON.stringify({ daily_hero_openai_api_key: dailyHeroOpenaiApiKey }),
+  })
+}
+
 export function getZoomJoinHints() {
   return request<ZoomJoinHints>('/api/settings/zoom-join')
 }

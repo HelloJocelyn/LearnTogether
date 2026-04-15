@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from . import crud, schemas
+from .checkin_config import resolve_daily_hero_openai_api_key
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -136,7 +137,7 @@ def _generate_image_bytes(client: Any, image_prompt: str) -> bytes:
 def _persist_new_hero(db: Session, hero_date_local: str) -> schemas.DailyHeroOut:
   from openai import OpenAI
 
-  api_key = os.getenv("OPENAI_API_KEY", "").strip()
+  api_key = resolve_daily_hero_openai_api_key()
   if not api_key:
     return schemas.DailyHeroOut(date=hero_date_local)
 
@@ -170,7 +171,7 @@ def get_daily_hero_response(db: Session) -> schemas.DailyHeroOut:
       return _row_to_out(row)
     crud.delete_daily_hero(db, row=row)
 
-  api_key = os.getenv("OPENAI_API_KEY", "").strip()
+  api_key = resolve_daily_hero_openai_api_key()
   if not api_key:
     return schemas.DailyHeroOut(date=today)
 

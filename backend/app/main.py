@@ -16,10 +16,12 @@ from . import crud, schemas
 from .badge_storage import path_for_stored_filename, save_certificate_image
 from .checkin_config import (
   load_checkin_window_config,
+  load_daily_hero_settings,
   load_statistics_settings,
   load_zoom_join_settings,
   resolve_checkin_config_path,
   save_checkin_window_config,
+  save_daily_hero_settings,
   save_statistics_settings,
   save_zoom_join_settings,
 )
@@ -238,6 +240,17 @@ def update_statistics_settings(payload: schemas.StatisticsSettingsIn):
   except ValueError as exc:
     raise HTTPException(status_code=400, detail=str(exc)) from exc
   return schemas.StatisticsSettingsOut(**saved)
+
+
+@app.get("/api/settings/daily-hero", response_model=schemas.DailyHeroSettingsOut)
+def get_daily_hero_settings():
+  return schemas.DailyHeroSettingsOut(**load_daily_hero_settings())
+
+
+@app.put("/api/settings/daily-hero", response_model=schemas.DailyHeroSettingsOut)
+def update_daily_hero_settings(payload: schemas.DailyHeroSettingsIn):
+  save_daily_hero_settings(daily_hero_openai_api_key=payload.daily_hero_openai_api_key)
+  return schemas.DailyHeroSettingsOut(**load_daily_hero_settings())
 
 
 @app.get("/api/settings/zoom-join", response_model=schemas.ZoomJoinHintsOut)

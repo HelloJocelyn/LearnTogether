@@ -115,11 +115,6 @@ export default function Home() {
       }).format(new Date()),
     []
   )
-  const todayJoined = useMemo(() => {
-    const names = new Set(checkins.map((c) => c.nickname.trim()))
-    return names.size
-  }, [checkins])
-
   useEffect(() => {
     listCheckins(500, false, { todayOnly: true })
       .then(setCheckins)
@@ -339,7 +334,6 @@ export default function Home() {
             <div className="keepUpInner">
               <div className="keepUpHeader">
                 <h2>✨ {t('home.encourageTitle')}</h2>
-                <div className="muted">{t('home.todayJoinedMembers', { count: todayJoined })}</div>
                 <div className="muted">{t('home.dateWithTz', { tz: displayTz, date: currentZoneDate })}</div>
               </div>
               <div className="keepUpHeroVisual">
