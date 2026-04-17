@@ -122,7 +122,7 @@ echo 'VITE_ZOOM_MEETING_URL=https://zoom.us/j/your_meeting_id' > .env.local
 
 ```bash
 cd backend
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # optional; edit .env for OPENAI_API_KEY, CHECKIN_TZ, etc.
@@ -140,4 +140,34 @@ npm run dev
 ```
 
 If you run locally (without the Nginx proxy), set `VITE_API_BASE_URL=http://localhost:8000` to avoid calling the relative `/api`.
+
+#### Progressive Web App (PWA)
+
+The frontend uses [`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/) with a web app manifest (`manifest.webmanifest`), service worker, and PNG icons (`public/pwa-192.png`, `public/pwa-512.png`). In development, `devOptions.enabled` is on so you can test install and offline caching on **desktop Chrome** at `http://localhost:5173` (use the browser’s install / app menu when it appears).
+
+**Commands**
+
+| Command | Use case |
+|--------|----------|
+| `npm run dev` | Default dev server; good for **localhost** PWA testing. |
+| `npm run dev:lan` | Same as `vite --host 0.0.0.0 --mode lan`: listen on all interfaces and enable **HTTPS** for testing on **another device on the same Wi‑Fi** (phone, tablet). |
+
+**Why `dev:lan` uses HTTPS**  
+Service workers only run in a **secure context**. `http://localhost` counts as secure, but `http://<LAN-IP>` (e.g. `http://192.168.1.42`) does **not**, so the PWA will not register over plain HTTP from a phone. `dev:lan` turns on `@vitejs/plugin-basic-ssl` so you open **`https://<your-PC-LAN-IP>:5173`** on the phone and accept the self-signed certificate warning the first time (or use trusted certs; see below).
+
+**Find your PC’s LAN IP**  
+On Windows, run `ipconfig` and use the **IPv4** address of your Wi‑Fi or Ethernet adapter (often `192.168.x.x`). If you use **WSL**, that address is the **Windows** host IP, not the `172.x` address shown inside Linux.
+
+**Optional trusted HTTPS (fewer warnings on the phone)**  
+Install [mkcert](https://github.com/FiloSottile/mkcert), then create `frontend/certs/key.pem` and `frontend/certs/cert.pem` including your LAN IP (and `localhost`). The Vite config prefers those files when present; the `certs/` directory is gitignored.
+
+**Production-style check**
+
+```bash
+cd frontend
+npm run build
+npm run preview -- --host 0.0.0.0
+```
+
+Then open the printed URL (HTTPS from the preview server if configured). Deployed sites behind **Nginx with HTTPS** behave like normal PWAs for end users.
 
