@@ -150,16 +150,9 @@ The frontend uses [`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/) with a 
 | Command | Use case |
 |--------|----------|
 | `npm run dev` | Default dev server; good for **localhost** PWA testing. |
-| `npm run dev:lan` | Same as `vite --host 0.0.0.0 --mode lan`: listen on all interfaces and enable **HTTPS** for testing on **another device on the same Wi‑Fi** (phone, tablet). |
+| `npm run dev:lan` | `vite --host 0.0.0.0 --mode lan`: listen on all interfaces so you can open **`http://<your-PC-LAN-IP>:5173`** from another device on the same Wi‑Fi (use the PC’s LAN IPv4 from `ipconfig` on Windows; on WSL use the **host** IP, not the `172.x` address inside Linux). |
 
-**Why `dev:lan` uses HTTPS**  
-Service workers only run in a **secure context**. `http://localhost` counts as secure, but `http://<LAN-IP>` (e.g. `http://192.168.1.42`) does **not**, so the PWA will not register over plain HTTP from a phone. `dev:lan` turns on `@vitejs/plugin-basic-ssl` so you open **`https://<your-PC-LAN-IP>:5173`** on the phone and accept the self-signed certificate warning the first time (or use trusted certs; see below).
-
-**Find your PC’s LAN IP**  
-On Windows, run `ipconfig` and use the **IPv4** address of your Wi‑Fi or Ethernet adapter (often `192.168.x.x`). If you use **WSL**, that address is the **Windows** host IP, not the `172.x` address shown inside Linux.
-
-**Optional trusted HTTPS (fewer warnings on the phone)**  
-Install [mkcert](https://github.com/FiloSottile/mkcert), then create `frontend/certs/key.pem` and `frontend/certs/cert.pem` including your LAN IP (and `localhost`). The Vite config prefers those files when present; the `certs/` directory is gitignored.
+HTTPS for the Vite dev server is **disabled** for now (plain HTTP only). **PWA install / service workers on a phone** usually need **HTTPS** or **localhost**; over `http://<LAN-IP>` the browser may not treat the page as a secure context, so test PWA install on **desktop** with `npm run dev`, or use **`npm run build`** + **`npm run preview`** behind HTTPS, or your deployed **Nginx** site.
 
 **Production-style check**
 
@@ -169,5 +162,5 @@ npm run build
 npm run preview -- --host 0.0.0.0
 ```
 
-Then open the printed URL (HTTPS from the preview server if configured). Deployed sites behind **Nginx with HTTPS** behave like normal PWAs for end users.
+Then open the printed URL. Deployed sites behind **Nginx with HTTPS** behave like normal PWAs for end users.
 

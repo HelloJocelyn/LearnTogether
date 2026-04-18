@@ -12,9 +12,6 @@ dist
 dist-ssr
 *.local
 
-# Optional mkcert / TLS for npm run dev:lan (LAN IP in cert SAN)
-certs/
-
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
