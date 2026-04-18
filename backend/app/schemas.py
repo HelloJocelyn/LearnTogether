@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ItemCreate(BaseModel):
@@ -82,6 +82,78 @@ class AttendanceImportConfirmOut(BaseModel):
   attended: int
   not_attended: int
   unknown: int
+
+
+def derive_learning_goal_progress(total_units: int, complete_units: int) -> int:
+  """Map complete/total units to 0–100% (rounded). Call when total_units > 0."""
+  if total_units <= 0:
+    return 0
+  return min(100, max(0, round(complete_units * 100 / total_units)))
+
+
+class LearningGoalCreate(BaseModel):
+  name: str = Field(min_length=1, max_length=200)
+  progress: int = Field(default=0, ge=0, le=100)
+  total_units: int = Field(default=0, ge=0)
+  complete_units: int = Field(default=0, ge=0)
+  start_date: Optional[date] = None
+  deadline: Optional[date] = None
+
+  @model_validator(mode="after")
+  def validate_units(self) -> "LearningGoalCreate":
+    if self.total_units > 0 and self.complete_units > self.total_units:
+      raise ValueError("complete_units cannot exceed total_units")
+    if self.start_date is not None and self.deadline is not None and self.start_date > self.deadline:
+      raise ValueError("start_date cannot be after deadline")
+    if self.total_units > 0:
+      object.__setattr__(self, "progress", derive_learning_goal_progress(self.total_units, self.complete_units))
+    return self
+
+
+class LearningGoalUpdate(BaseModel):
+  name: Optional[str] = Field(None, min_length=1, max_length=200)
+  progress: Optional[int] = Field(None, ge=0, le=100)
+  total_units: Optional[int] = Field(None, ge=0)
+  complete_units: Optional[int] = Field(None, ge=0)
+  start_date: Optional[date] = None
+  deadline: Optional[date] = None
+
+
+class LearningGoalOut(BaseModel):
+  model_config = ConfigDict(from_attributes=True)
+
+  id: int
+  created_at: datetime
+  name: str
+  progress: int
+  total_units: int
+  complete_units: int
+  start_date: Optional[date] = None
+  deadline: Optional[date] = None
+  behind_pace: bool = False
+  expected_units_pace: Optional[int] = None
+
+  @model_validator(mode="after")
+  def sync_progress_from_units(self) -> "LearningGoalOut":
+    if self.total_units > 0:
+      derived = derive_learning_goal_progress(self.total_units, self.complete_units)
+      if derived != self.progress:
+        return self.model_copy(update={"progress": derived})
+    return self
+
+
+def attach_learning_goal_pace(out: LearningGoalOut, *, today: date) -> LearningGoalOut:
+  """Set behind_pace / expected_units_pace using linear spread over start_date…deadline."""
+  from .learning_goal_pace import pace_expected_and_behind
+
+  behind, exp = pace_expected_and_behind(
+    start_date=out.start_date,
+    deadline=out.deadline,
+    total_units=out.total_units,
+    complete_units=out.complete_units,
+    today=today,
+  )
+  return out.model_copy(update={"behind_pace": behind, "expected_units_pace": exp})
 
 
 class MemberCreate(BaseModel):

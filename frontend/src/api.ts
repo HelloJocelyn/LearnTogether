@@ -304,3 +304,64 @@ export function deleteBadge(badgeId: number) {
   return request<void>(`/api/badges/${badgeId}`, { method: 'DELETE' })
 }
 
+export type LearningGoal = {
+  id: number
+  created_at: string
+  name: string
+  progress: number
+  total_units: number
+  complete_units: number
+  start_date: string | null
+  deadline: string | null
+  /** True when complete units are below the linear schedule (start→deadline, CHECKIN_TZ "today"). */
+  behind_pace: boolean
+  /** Floor of expected complete units by "today" on that schedule, or null if N/A. */
+  expected_units_pace: number | null
+}
+
+export function listLearningGoals() {
+  return request<LearningGoal[]>('/api/learning-goals')
+}
+
+export function createLearningGoal(payload: {
+  name: string
+  progress?: number
+  total_units?: number
+  complete_units?: number
+  start_date?: string | null
+  deadline?: string | null
+}) {
+  return request<LearningGoal>('/api/learning-goals', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: payload.name,
+      progress: payload.progress ?? 0,
+      total_units: payload.total_units ?? 0,
+      complete_units: payload.complete_units ?? 0,
+      start_date: payload.start_date ?? null,
+      deadline: payload.deadline ?? null,
+    }),
+  })
+}
+
+export function updateLearningGoal(
+  goalId: number,
+  payload: {
+    name?: string
+    progress?: number
+    total_units?: number
+    complete_units?: number
+    start_date?: string | null
+    deadline?: string | null
+  }
+) {
+  return request<LearningGoal>(`/api/learning-goals/${goalId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteLearningGoal(goalId: number) {
+  return request<{ ok: boolean }>(`/api/learning-goals/${goalId}`, { method: 'DELETE' })
+}
+

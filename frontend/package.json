@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:full": "vite --mode full",
     "dev:lan": "vite --host 0.0.0.0 --mode lan",
-    "build": "tsc -b && vite build",
+    "build": "npm run build:lite",
+    "build:lite": "tsc -b && vite build --mode lite",
+    "build:full": "tsc -b && vite build --mode full",
     "lint": "eslint .",
     "preview": "vite preview"
   },

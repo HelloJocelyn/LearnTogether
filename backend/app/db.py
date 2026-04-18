@@ -103,3 +103,15 @@ def init_db() -> None:
           except IntegrityError:
             pass
 
+    if "learning_goals" in insp.get_table_names():
+      lg_cols = {c["name"] for c in insp.get_columns("learning_goals")}
+      if "total_units" not in lg_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE learning_goals ADD COLUMN total_units INTEGER NOT NULL DEFAULT 0"))
+      if "complete_units" not in lg_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE learning_goals ADD COLUMN complete_units INTEGER NOT NULL DEFAULT 0"))
+      if "start_date" not in lg_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE learning_goals ADD COLUMN start_date DATE"))
+

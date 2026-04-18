@@ -81,6 +81,18 @@ CREATE TABLE attendance_import_items (
 	FOREIGN KEY(import_id) REFERENCES attendance_imports (id)
 );
 
+CREATE TABLE learning_goals (
+	id INTEGER NOT NULL,
+	created_at DATETIME NOT NULL,
+	name VARCHAR(200) NOT NULL,
+	progress INTEGER NOT NULL,
+	total_units INTEGER NOT NULL,
+	complete_units INTEGER NOT NULL,
+	start_date DATE,
+	deadline DATE,
+	PRIMARY KEY (id)
+);
+
 -- ---------------------------------------------------------------------------
 -- Indexes (match SQLAlchemy index=True / unique=True on columns)
 -- ---------------------------------------------------------------------------
@@ -108,3 +120,5 @@ CREATE INDEX ix_achievement_badges_id ON achievement_badges (id);
 CREATE INDEX ix_attendance_import_items_id ON attendance_import_items (id);
 
 CREATE INDEX ix_attendance_import_items_import_id ON attendance_import_items (import_id);
+
+CREATE INDEX ix_learning_goals_id ON learning_goals (id);

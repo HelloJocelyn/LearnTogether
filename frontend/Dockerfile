@@ -6,7 +6,9 @@ COPY package.json package-lock.json* /app/
 RUN npm install
 
 COPY . /app/
-RUN npm run build
+# Default image is LearnTogether Lite; use `docker build --build-arg BUILD_MODE=full` for Full.
+ARG BUILD_MODE=lite
+RUN npm run "build:${BUILD_MODE}"
 
 
 FROM nginx:1.27-alpine

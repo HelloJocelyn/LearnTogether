@@ -1,4 +1,4 @@
-from datetime import datetime, time, timezone, timedelta
+from datetime import date, datetime, time, timezone, timedelta
 import logging
 from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -15,8 +15,10 @@ from .models import (
   CheckIn,
   DailyHero,
   Item,
+  LearningGoal,
   Member,
 )
+from .schemas import derive_learning_goal_progress
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -536,6 +538,55 @@ def delete_badge(db: Session, *, badge_id: int) -> bool:
   if row is None:
     return False
   delete_stored_file(row.certificate_image_filename)
+  db.delete(row)
+  db.commit()
+  return True
+
+
+def list_learning_goals(db: Session) -> list[LearningGoal]:
+  stmt = select(LearningGoal).order_by(LearningGoal.id.desc())
+  return list(db.scalars(stmt).all())
+
+
+def create_learning_goal(
+  db: Session,
+  *,
+  name: str,
+  progress: int,
+  total_units: int,
+  complete_units: int,
+  start_date: Optional[date],
+  deadline: Optional[date],
+) -> LearningGoal:
+  now = datetime.now(timezone.utc)
+  effective_progress = (
+    derive_learning_goal_progress(total_units, complete_units)
+    if total_units > 0
+    else progress
+  )
+  row = LearningGoal(
+    created_at=now,
+    name=name.strip(),
+    progress=effective_progress,
+    total_units=total_units,
+    complete_units=complete_units,
+    start_date=start_date,
+    deadline=deadline,
+  )
+  db.add(row)
+  db.commit()
+  db.refresh(row)
+  return row
+
+
+def get_learning_goal(db: Session, *, goal_id: int) -> Optional[LearningGoal]:
+  return db.get(LearningGoal, goal_id)
+
+
+def delete_learning_goal(db: Session, *, goal_id: int) -> bool:
+  row = db.get(LearningGoal, goal_id)
+  if row is None:
+    return False
   db.delete(row)
   db.commit()
   return True

@@ -3,6 +3,7 @@ services:
     build:
       context: ./backend
     environment:
+      - APP_EDITION=${APP_EDITION:-lite}
       - DATABASE_URL=sqlite:////data/app.db
       - CHECKIN_TZ=Asia/Tokyo
       - BADGE_CERT_DIR=/data/badge_certificates
@@ -17,6 +18,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        BUILD_MODE: ${BUILD_MODE:-lite}
     depends_on:
       - backend
     ports:

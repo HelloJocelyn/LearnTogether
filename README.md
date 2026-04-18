@@ -6,6 +6,45 @@ Monorepo with:
 - `backend/`: FastAPI + SQLite (SQLAlchemy), served by Uvicorn
 - `docker-compose.yml`: run everything with Docker
 
+## Product editions (lite vs full)
+
+This project is split into **two publishable editions**. The intended model is **two builds, two deploys**: separate artifacts (and typically separate images or hosts) per edition, not one install that toggles features at runtime.
+
+### LearnTogether Lite (current)
+
+**Lite is the edition this repository implements today.** It includes everything currently documented and shipped here, for example:
+
+- Check-ins, check-in window configuration, session classification (normal / late / leave / outside)
+- Home (QR to `/join`, Zoom flow, daily hero image when configured, encourage copy)
+- Members and badges
+- Statistics
+- Settings (check-in window, Zoom, optional daily hero API key, statistics options)
+- Attendance import
+- Progressive Web App (manifest + service worker) as configured in the frontend
+- Deploy paths in this README (Docker, EC2 scripts)
+
+### LearnTogether Full
+
+**Full** builds add features on top of Lite. Implemented so far:
+
+- **Learning goals** (`/learning-goals`): goal name, progress (derived from units when a positive total is set), optional **total / complete units**, optional **start date** and **deadline**, and a **behind-schedule** flag when “today” (in `CHECKIN_TZ`) would require more completed units on a linear plan than you have recorded (`GET/POST/PATCH/DELETE /api/learning-goals`). The backend requires `APP_EDITION=full`; the UI must be a **full** build (`VITE_EDITION=full`).
+
+Still planned for Full:
+
+- User **login** and authenticated sessions
+- **Notifications** (e.g. push or email)
+- Other full-only features as designed
+
+#### How to build and run Full
+
+- **Frontend** (from `frontend/`): `npm run build:full` or `npm run dev:full`. Files `frontend/.env.full`, `frontend/.env.lite`, `frontend/.env.development`, and `frontend/.env.lan` set `VITE_EDITION`. The default **`npm run build`** and Docker frontend build use **Lite** (`build:lite`).
+- **Backend:** set `APP_EDITION=full` (see `backend/.env.example`). Learning goal APIs return **403** when the server is Lite.
+- **Docker:** Compose uses `APP_EDITION` (default `lite`) and `BUILD_MODE` for the frontend image (default `lite`). Example full stack:
+
+  ```bash
+  APP_EDITION=full BUILD_MODE=full docker compose up --build
+  ```
+
 ## Quickstart (Docker)
 
 ```bash
@@ -138,6 +177,8 @@ cd frontend
 npm install
 npm run dev
 ```
+
+For **Full** UI (learning goals nav and `/learning-goals`), run `npm run dev:full` and set `APP_EDITION=full` in `backend/.env`.
 
 If you run locally (without the Nginx proxy), set `VITE_API_BASE_URL=http://localhost:8000` to avoid calling the relative `/api`.
 

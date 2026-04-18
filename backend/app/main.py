@@ -2,7 +2,7 @@ import logging
 import mimetypes
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import parse_qs, urlparse
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from . import crud, schemas
+from .schemas import attach_learning_goal_pace, derive_learning_goal_progress
 from .badge_storage import path_for_stored_filename, save_certificate_image
 from .checkin_config import (
   load_checkin_window_config,
@@ -33,7 +34,22 @@ from .models import AchievementBadge
 app = FastAPI(title="LearnTogether API")
 logger = logging.getLogger("uvicorn.error")
 
+
+def require_full_edition() -> None:
+  edition = os.getenv("APP_EDITION", "lite").strip().lower()
+  if edition != "full":
+    raise HTTPException(
+      status_code=403,
+      detail="This endpoint requires Full edition (set APP_EDITION=full on the server).",
+    )
+
+
 _BADGE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _today_checkin_tz() -> date:
+  tz = os.getenv("CHECKIN_TZ") or "Asia/Tokyo"
+  return datetime.now(ZoneInfo(tz)).date()
 
 
 def _merge_zoom_values(meeting_id: str, passcode: str, join_url: str) -> tuple[str, str]:
@@ -543,4 +559,77 @@ def confirm_attendance_import(import_id: int, db: Session = Depends(get_db)):
   if record is None:
     raise HTTPException(status_code=404, detail="attendance import not found")
   return schemas.AttendanceImportConfirmOut(import_id=record.id, status=record.status, **counts)
+
+
+@app.get("/api/learning-goals", response_model=list[schemas.LearningGoalOut])
+def list_learning_goals_api(db: Session = Depends(get_db), _: None = Depends(require_full_edition)):
+  today = _today_checkin_tz()
+  rows = crud.list_learning_goals(db)
+  return [
+    attach_learning_goal_pace(schemas.LearningGoalOut.model_validate(r), today=today) for r in rows
+  ]
+
+
+@app.post("/api/learning-goals", response_model=schemas.LearningGoalOut)
+def create_learning_goal_api(
+  payload: schemas.LearningGoalCreate, db: Session = Depends(get_db), _: None = Depends(require_full_edition)
+):
+  row = crud.create_learning_goal(
+    db,
+    name=payload.name,
+    progress=payload.progress,
+    total_units=payload.total_units,
+    complete_units=payload.complete_units,
+    start_date=payload.start_date,
+    deadline=payload.deadline,
+  )
+  today = _today_checkin_tz()
+  return attach_learning_goal_pace(schemas.LearningGoalOut.model_validate(row), today=today)
+
+
+@app.patch("/api/learning-goals/{goal_id}", response_model=schemas.LearningGoalOut)
+def patch_learning_goal(
+  goal_id: int,
+  payload: schemas.LearningGoalUpdate,
+  db: Session = Depends(get_db),
+  _: None = Depends(require_full_edition),
+):
+  row = crud.get_learning_goal(db, goal_id=goal_id)
+  if row is None:
+    raise HTTPException(status_code=404, detail="learning goal not found")
+  data = payload.model_dump(exclude_unset=True)
+  if "name" in data:
+    row.name = str(data["name"]).strip()
+  if "progress" in data:
+    row.progress = int(data["progress"])
+  if "total_units" in data:
+    row.total_units = int(data["total_units"])
+  if "complete_units" in data:
+    row.complete_units = int(data["complete_units"])
+  if "start_date" in data:
+    row.start_date = data["start_date"]
+  if "deadline" in data:
+    row.deadline = data["deadline"]
+  total_u = row.total_units
+  complete_u = row.complete_units
+  if total_u > 0 and complete_u > total_u:
+    raise HTTPException(status_code=400, detail="complete_units cannot exceed total_units")
+  if row.start_date is not None and row.deadline is not None and row.start_date > row.deadline:
+    raise HTTPException(status_code=400, detail="start_date cannot be after deadline")
+  if row.total_units > 0:
+    row.progress = derive_learning_goal_progress(row.total_units, row.complete_units)
+  db.commit()
+  db.refresh(row)
+  today = _today_checkin_tz()
+  return attach_learning_goal_pace(schemas.LearningGoalOut.model_validate(row), today=today)
+
+
+@app.delete("/api/learning-goals/{goal_id}")
+def delete_learning_goal_api(
+  goal_id: int, db: Session = Depends(get_db), _: None = Depends(require_full_edition)
+):
+  ok = crud.delete_learning_goal(db, goal_id=goal_id)
+  if not ok:
+    raise HTTPException(status_code=404, detail="learning goal not found")
+  return {"ok": True}
 

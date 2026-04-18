@@ -1,7 +1,7 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -69,6 +69,21 @@ class DailyHero(Base):
   subtitle: Mapped[str] = mapped_column(String(400), nullable=False)
   image_filename: Mapped[str] = mapped_column(String(80), nullable=False)
   created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class LearningGoal(Base):
+  """Full edition: user-defined learning goals (name, progress %, units, optional dates)."""
+
+  __tablename__ = "learning_goals"
+
+  id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+  created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+  name: Mapped[str] = mapped_column(String(200), nullable=False)
+  progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+  total_units: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+  complete_units: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+  start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+  deadline: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
 
 
 class AchievementBadge(Base):
