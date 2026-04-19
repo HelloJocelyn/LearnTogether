@@ -9,6 +9,8 @@ import AttendanceImport from './pages/AttendanceImport'
 import Statistics from './pages/Statistics'
 import Members from './pages/Members'
 import Settings from './pages/Settings'
+import { GoalsBehindInAppBanner } from './components/GoalsBehindInAppBanner'
+import { GoalsBehindNotifyEffect } from './components/GoalsBehindNotifyEffect'
 import { useI18n } from './i18n'
 
 const LearningGoals = lazy(() => import('./pages/LearningGoals'))
@@ -59,27 +61,35 @@ function Layout() {
 
 function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route path="/" element={<Home />} />
-        <Route path="/statistics" element={<Statistics />} />
-        <Route path="/members" element={<Members />} />
-        {isFullEdition() ? (
-          <Route
-            path="/learning-goals"
-            element={
-              <Suspense fallback={<GoalsLoadingFallback />}>
-                <LearningGoals />
-              </Suspense>
-            }
-          />
-        ) : null}
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/join" element={<Join />} />
-        <Route path="/attendance/import" element={<AttendanceImport />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      {isFullEdition() ? (
+        <>
+          <GoalsBehindNotifyEffect />
+          <GoalsBehindInAppBanner />
+        </>
+      ) : null}
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/statistics" element={<Statistics />} />
+          <Route path="/members" element={<Members />} />
+          {isFullEdition() ? (
+            <Route
+              path="/learning-goals"
+              element={
+                <Suspense fallback={<GoalsLoadingFallback />}>
+                  <LearningGoals />
+                </Suspense>
+              }
+            />
+          ) : null}
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/join" element={<Join />} />
+          <Route path="/attendance/import" element={<AttendanceImport />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   )
 }
 

@@ -12,6 +12,13 @@ import {
   updateZoomJoinHints,
   type CheckIn,
 } from '../api'
+import { isFullEdition } from '../edition'
+import {
+  getGoalsBehindNotifyEnabled,
+  prefersInAppGoalsBehindReminder,
+  runTestBehindGoalNotification,
+  setGoalsBehindNotifyEnabled,
+} from '../goalBehindNotifications'
 import { useI18n } from '../i18n'
 
 const displayTz = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
@@ -82,6 +89,9 @@ export default function Settings() {
   const [statsEditing, setStatsEditing] = useState(false)
   const [statsSaving, setStatsSaving] = useState(false)
   const [statsSaved, setStatsSaved] = useState<string | null>(null)
+  const [goalsNotifyEnabled, setGoalsNotifyEnabled] = useState(() => getGoalsBehindNotifyEnabled())
+  const [goalsNotifyFeedback, setGoalsNotifyFeedback] = useState<string | null>(null)
+  const [notifyPermTick, setNotifyPermTick] = useState(0)
 
   useEffect(() => {
     Promise.all([
@@ -107,6 +117,80 @@ export default function Settings() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    const bump = () => setNotifyPermTick((x) => x + 1)
+    document.addEventListener('visibilitychange', bump)
+    return () => document.removeEventListener('visibilitychange', bump)
+  }, [])
+
+  async function onToggleGoalsNotify(checked: boolean) {
+    setGoalsNotifyFeedback(null)
+    if (!checked) {
+      setGoalsBehindNotifyEnabled(false)
+      setGoalsNotifyEnabled(false)
+      setNotifyPermTick((x) => x + 1)
+      return
+    }
+    if (prefersInAppGoalsBehindReminder()) {
+      setGoalsBehindNotifyEnabled(true)
+      setGoalsNotifyEnabled(true)
+      return
+    }
+    if (typeof Notification === 'undefined') {
+      setGoalsNotifyFeedback(t('settings.goalsNotifyUnsupported'))
+      return
+    }
+    let perm = Notification.permission
+    if (perm === 'default') {
+      perm = await Notification.requestPermission()
+    }
+    setNotifyPermTick((x) => x + 1)
+    if (perm !== 'granted') {
+      setGoalsNotifyFeedback(t('settings.goalsNotifyNeedPermission'))
+      return
+    }
+    setGoalsBehindNotifyEnabled(true)
+    setGoalsNotifyEnabled(true)
+  }
+
+  async function onTestGoalsNotify() {
+    setGoalsNotifyFeedback(null)
+    if (!prefersInAppGoalsBehindReminder()) {
+      if (typeof Notification === 'undefined') {
+        setGoalsNotifyFeedback(t('settings.goalsNotifyUnsupported'))
+        return
+      }
+      if (Notification.permission !== 'granted') {
+        setGoalsNotifyFeedback(t('settings.goalsNotifyNeedPermission'))
+        return
+      }
+    }
+    const r = await runTestBehindGoalNotification({
+      getMessage: (count) => ({
+        title: t('notify.goalsBehindTitle'),
+        body: t('notify.goalsBehindBody', { count }),
+      }),
+    })
+    if (r.reason === 'unsupported') setGoalsNotifyFeedback(t('settings.goalsNotifyUnsupported'))
+    else if (r.reason === 'no-behind') setGoalsNotifyFeedback(t('settings.goalsNotifyNoBehind'))
+    else if (r.reason === 'error')
+      setGoalsNotifyFeedback(formatGoalsBehindTestError(t, r.detail))
+    else if (r.shown)
+      setGoalsNotifyFeedback(
+        prefersInAppGoalsBehindReminder() ? t('settings.goalsNotifySentInApp') : t('settings.goalsNotifySent')
+      )
+  }
+
+  function formatGoalsBehindTestError(
+    translate: (key: string, vars?: Record<string, string | number>) => string,
+    detail?: string
+  ): string {
+    if (!detail) return translate('settings.goalsNotifyError')
+    if (detail.includes('403') || detail.includes('Full edition'))
+      return translate('settings.goalsNotifyFullEdition')
+    return translate('settings.goalsNotifyErrorDetail', { detail })
+  }
 
   async function onSaveWindow() {
     setSaving(true)
@@ -424,6 +508,50 @@ export default function Settings() {
           {statsSaved ? <p className="muted">{statsSaved}</p> : null}
           {error ? <p className="error">{error}</p> : null}
         </section>
+
+        {isFullEdition() ? (
+          <section className="card settingsCard settingsPrimaryCard">
+            <h3 style={{ margin: 0 }}>{t('settings.goalsNotifyTitle')}</h3>
+            <p className="muted" style={{ marginTop: 8, marginBottom: 12, fontSize: 13 }}>
+              {t('settings.goalsNotifyDesc')}
+            </p>
+            {prefersInAppGoalsBehindReminder() ? (
+              <p className="muted" style={{ marginBottom: 12, fontSize: 13 }}>
+                {t('settings.goalsNotifyInAppNote')}
+              </p>
+            ) : null}
+            <label className="label" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <input
+                type="checkbox"
+                checked={goalsNotifyEnabled}
+                onChange={(e) => void onToggleGoalsNotify(e.target.checked)}
+              />
+              <span>{t('settings.goalsNotifyEnable')}</span>
+            </label>
+            {prefersInAppGoalsBehindReminder() ? null : (
+              <p className="muted" style={{ marginTop: 8, marginBottom: 8, fontSize: 13 }}>
+                {t('settings.goalsNotifyPermission', {
+                  state: (() => {
+                    void notifyPermTick
+                    if (typeof Notification === 'undefined') return t('settings.goalsNotifyPermission.unsupported')
+                    const p = Notification.permission
+                    if (p === 'granted') return t('settings.goalsNotifyPermission.granted')
+                    if (p === 'denied') return t('settings.goalsNotifyPermission.denied')
+                    return t('settings.goalsNotifyPermission.prompt')
+                  })(),
+                })}
+              </p>
+            )}
+            <button type="button" className="secondary" disabled={loading} onClick={() => void onTestGoalsNotify()}>
+              {t('settings.goalsNotifyTest')}
+            </button>
+            {goalsNotifyFeedback ? (
+              <p className="muted" style={{ marginTop: 10, marginBottom: 0 }}>
+                {goalsNotifyFeedback}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
 
         <details className="card settingsCard" open={false}>
           <summary className="shareSummary">
