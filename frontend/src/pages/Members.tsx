@@ -13,30 +13,7 @@ import {
   type Member,
 } from '../api'
 import { useI18n } from '../i18n'
-
-function hashString(input: string) {
-  let hash = 0
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash * 31 + input.charCodeAt(i)) | 0
-  }
-  return hash >>> 0
-}
-
-function avatarFor(nickname: string) {
-  const trimmed = nickname.trim()
-  const parts = trimmed.split(/\s+/).filter(Boolean)
-  const initials =
-    parts.length === 0
-      ? '?'
-      : parts.length === 1
-        ? parts[0]!.slice(0, 2).toUpperCase()
-        : (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
-
-  const h = hashString(trimmed.toLowerCase())
-  const hue = h % 360
-  const bg = `hsl(${hue} 70% 40%)`
-  return { initials, bg }
-}
+import { avatarFor } from '../avatar'
 
 function resolveBadgeCertSrc(b: AchievementBadge): string | null {
   const raw = b.certificate_image_url?.trim()
@@ -115,6 +92,11 @@ export default function Members() {
     )
     return { badgesByMember: byMember, unlinkedBadges: unlinked }
   }, [badges, members, memberNameSet])
+
+  const membersWithBadges = useMemo(
+    () => members.filter((m) => (badgesByMember.get(m.id) ?? []).length > 0),
+    [members, badgesByMember],
+  )
 
   async function onAddMember(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -302,7 +284,10 @@ export default function Members() {
     <div className="page">
       <main className="main membersMain">
         <section className="card membersCard membersCardMembers">
-          <h2>{t('members.title')}</h2>
+          <div className="titleRow">
+            <h2 style={{ marginBottom: 0 }}>{t('members.title')}</h2>
+            <span className="muted membersMemberCount">{t('members.memberCount', { count: members.length })}</span>
+          </div>
 
           <div className="membersSubSection membersSubSectionSplit">
             {members.length === 0 ? (
@@ -322,8 +307,14 @@ export default function Members() {
                       <div className="rowText" style={{ flex: 1 }}>
                         <div className="rowTop">
                           <strong>{memberDisplayName(m)}</strong>
-                          <button type="button" className="secondary" onClick={() => onDeleteMember(m.id)}>
-                            {t('members.remove')}
+                          <button
+                            type="button"
+                            className="secondary memberRemoveIconBtn"
+                            onClick={() => onDeleteMember(m.id)}
+                            aria-label={t('members.remove')}
+                            title={t('members.remove')}
+                          >
+                            ✕
                           </button>
                         </div>
                       </div>
@@ -386,14 +377,14 @@ export default function Members() {
           </div>
 
           <div className="membersSubSection">
-            {members.length === 0 && unlinkedBadges.length === 0 ? (
+            {membersWithBadges.length === 0 && unlinkedBadges.length === 0 ? (
               <p className="muted" style={{ marginTop: 12 }}>
                 {t('settings.badgeEmpty')}
               </p>
             ) : null}
 
             <div className="membersBadgesListPanel">
-              {members.map((m, index) => {
+              {membersWithBadges.map((m, index) => {
                 const list = badgesByMember.get(m.id) ?? []
                 const av = avatarFor(memberDisplayName(m))
                 return (
@@ -404,13 +395,9 @@ export default function Members() {
                       </span>
                       <h3 className="memberBadgeGroupTitle">{memberDisplayName(m)}</h3>
                     </div>
-                    {list.length === 0 ? (
-                      <p className="muted memberBadgeGroupEmpty">{t('members.noBadgesForMember')}</p>
-                    ) : (
-                      <ul className="list dayList membersBadgeGrid" style={{ marginTop: 8 }}>
-                        {list.map((b) => renderBadgeRow(b))}
-                      </ul>
-                    )}
+                    <ul className="list dayList membersBadgeGrid" style={{ marginTop: 8 }}>
+                      {list.map((b) => renderBadgeRow(b))}
+                    </ul>
                   </div>
                 )
               })}

@@ -16,36 +16,13 @@ import {
 import ZoomManualJoin from '../components/ZoomManualJoin'
 import { classifySession, formatClockInTz } from '../checkinWindow'
 import { useI18n } from '../i18n'
+import { avatarFor } from '../avatar'
 
 const zoomUrl =
   (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
   'https://zoom.us/join'
 
 const displayTz = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
-
-function hashString(input: string) {
-  let hash = 0
-  for (let i = 0; i < input.length; i++) {
-    hash = (hash * 31 + input.charCodeAt(i)) | 0
-  }
-  return hash >>> 0
-}
-
-function avatarFor(nickname: string) {
-  const trimmed = nickname.trim()
-  const parts = trimmed.split(/\s+/).filter(Boolean)
-  const initials =
-    parts.length === 0
-      ? '?'
-      : parts.length === 1
-        ? parts[0]!.slice(0, 2).toUpperCase()
-        : (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
-
-  const h = hashString(trimmed.toLowerCase())
-  const hue = h % 360
-  const bg = `hsl(${hue} 70% 40%)`
-  return { initials, bg }
-}
 
 function splitMemberLabel(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)

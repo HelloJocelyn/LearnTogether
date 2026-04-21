@@ -98,6 +98,7 @@ const dictionaries: Record<Lang, Dict> = {
     'goals.nothingToSave': 'No changes to save.',
 
     'members.title': 'Members',
+    'members.memberCount': '{count} members',
     'members.desc': 'Add frequently used names here, then select them from Home quick check-in.',
     'members.membersSectionDesc': 'Create members and manage your member list.',
     'members.membersCreateTitle': 'Member creation',
@@ -126,7 +127,6 @@ const dictionaries: Record<Lang, Dict> = {
     'members.badgesByMemberTitle': 'Certificates by member',
     'members.badgesByMemberDesc':
       'Badges linked to a member, or with a nickname matching a member, are listed under that person. Others appear under “Other certificates”.',
-    'members.noBadgesForMember': 'No certificates recorded for this member yet.',
     'members.badgesUnlinkedTitle': 'Other certificates (nickname only)',
 
     'settings.title': 'Learning time setting',
@@ -392,6 +392,7 @@ const dictionaries: Record<Lang, Dict> = {
     'goals.nothingToSave': '没有需要保存的更改。',
 
     'members.title': '成员管理',
+    'members.memberCount': '共 {count} 人',
     'members.desc': '先在这里添加常用姓名，然后在首页快速签到中选择。',
     'members.membersSectionDesc': '在这里创建成员并管理成员列表。',
     'members.membersCreateTitle': '成员创建',
@@ -420,7 +421,6 @@ const dictionaries: Record<Lang, Dict> = {
     'members.badgesByMemberTitle': '各成员证书',
     'members.badgesByMemberDesc':
       '已关联成员、或昵称与成员一致的证书会显示在该成员下；其余显示在「其他证书」。',
-    'members.noBadgesForMember': '该成员暂无证书记录。',
     'members.badgesUnlinkedTitle': '其他证书（仅昵称）',
 
     'settings.title': '学习时间设置',
@@ -686,6 +686,7 @@ const dictionaries: Record<Lang, Dict> = {
     'goals.nothingToSave': '変更はありません。',
 
     'members.title': 'メンバー管理',
+    'members.memberCount': '{count} 名',
     'members.desc': 'よく使う名前をここで追加し、ホームのクイックチェックインで選択できます。',
     'members.membersSectionDesc': 'メンバー作成とメンバー一覧の管理を行います。',
     'members.membersCreateTitle': 'メンバー作成',
@@ -714,7 +715,6 @@ const dictionaries: Record<Lang, Dict> = {
     'members.badgesByMemberTitle': 'メンバー別の合格証',
     'members.badgesByMemberDesc':
       'メンバーに紐づいている、またはニックネームが一致する記録はその人の下に表示されます。それ以外は「その他」に表示されます。',
-    'members.noBadgesForMember': 'このメンバーの合格証はまだありません。',
     'members.badgesUnlinkedTitle': 'その他の合格証（ニックネームのみ）',
 
     'settings.title': '学習時間設定',

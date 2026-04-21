@@ -8,6 +8,7 @@ import {
   type CheckIn,
 } from '../api'
 import { useI18n } from '../i18n'
+import { avatarFor } from '../avatar'
 
 type Tab = 'monthly' | 'weekly' | 'yearly'
 
@@ -153,27 +154,6 @@ function weekdayColumnLabel(y: number, m: number, d: number, lang: 'en' | 'zh' |
     timeZone: 'UTC',
   })
   return `${wd} ${d}`
-}
-
-function avatarFor(nickname: string) {
-  // Keep this in sync with Home.tsx avatarFor.
-  const trimmed = nickname.trim()
-  const parts = trimmed.split(/\s+/).filter(Boolean)
-  const initials =
-    parts.length === 0
-      ? '?'
-      : parts.length === 1
-        ? parts[0]!.slice(0, 2).toUpperCase()
-        : (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
-
-  let hash = 0
-  for (let i = 0; i < trimmed.length; i++) {
-    hash = (hash * 31 + trimmed.charCodeAt(i)) | 0
-  }
-  const h = hash >>> 0
-  const hue = h % 360
-  const bg = `hsl(${hue} 70% 40%)`
-  return { initials, bg }
 }
 
 export default function CheckinAnalytics() {

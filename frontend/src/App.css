@@ -473,6 +473,19 @@ button.secondary {
   color: rgba(2, 6, 23, 0.8);
 }
 
+.membersMain .avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+}
+
+.membersMemberCount {
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
 .emptyRow {
   padding: 6px 2px;
 }
@@ -1484,6 +1497,18 @@ button.badgeCircle {
   margin-top: 2px;
 }
 
+.memberRemoveIconBtn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 .memberBadgeGroup {
   margin-top: 18px;
   padding-top: 14px;
@@ -1524,8 +1549,16 @@ button.badgeCircle {
 
 .memberBadgeGroupTitle {
   margin: 0;
-  font-size: 1.05rem;
-  font-weight: 800;
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+/* Roster list: smaller than body; no bold on name */
+.membersCardMembers .rowTop strong {
+  font-size: 0.8rem;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .memberBadgeGroupEmpty {
