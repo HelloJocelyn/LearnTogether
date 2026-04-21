@@ -125,34 +125,6 @@ export function createCheckin(nickname: string, status?: 'leave') {
   })
 }
 
-export type CheckinCsvImportResult = {
-  filename: string
-  resolved_year: number
-  title_year?: number | null
-  title_month?: number | null
-  parse_warnings: string[]
-  skipped_unknown_status_cells: number
-  parsed_cells: number
-  created: number
-  replaced: number
-  members_added: number
-  members_reactivated: number
-  members_already_active: number
-}
-
-/** Excel 早自习 CSV (UTF-8): 番号/姓名 + per-day 状态/参加时间. */
-export function importCheckinsFromCsv(file: File, defaultYear?: number) {
-  const formData = new FormData()
-  formData.append('file', file)
-  if (defaultYear !== undefined && !Number.isNaN(defaultYear)) {
-    formData.append('default_year', String(defaultYear))
-  }
-  return request<CheckinCsvImportResult>('/api/checkins/import-csv', {
-    method: 'POST',
-    body: formData,
-  })
-}
-
 export function createAttendanceImportFromImage(file: File) {
   const formData = new FormData()
   formData.append('image', file)

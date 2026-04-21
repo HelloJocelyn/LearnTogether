@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timezone, timedelta
 import logging
-from typing import Literal, Optional, Tuple
+from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select, update
@@ -235,81 +235,6 @@ def create_checkin(
   return checkin
 
 
-def upsert_imported_checkin(
-  db: Session,
-  *,
-  nickname: str,
-  checkin_date_local: str,
-  status: str,
-  created_at: datetime,
-) -> Literal["created", "replaced"]:
-  """Replace any existing check-in for the same nickname + local calendar day."""
-  if status not in {"morning", "late", "leave"}:
-    raise ValueError("invalid imported status")
-
-  existing = list(
-    db.scalars(
-      select(CheckIn)
-      .where(
-        and_(
-          CheckIn.nickname == nickname,
-          CheckIn.checkin_date_local == checkin_date_local,
-        )
-      )
-      .order_by(CheckIn.id.asc())
-    ).all()
-  )
-  replaced = len(existing) > 0
-  for row in existing:
-    db.delete(row)
-
-  checkin = CheckIn(
-    created_at=created_at,
-    nickname=nickname,
-    checkin_date_local=checkin_date_local,
-    status=status,
-    is_real=status in {"morning", "night", "normal", "late"},
-  )
-  db.add(checkin)
-  return "replaced" if replaced else "created"
-
-
-def import_checkins_from_parsed_cells(
-  db: Session,
-  cells: list,
-  *,
-  tz_name: str,
-) -> tuple[int, int]:
-  """Persist ParsedCheckinCell rows; returns (created_count, replaced_count)."""
-  from .checkin_csv_import import ParsedCheckinCell, utc_datetime_for_import
-
-  created = 0
-  replaced = 0
-  for cell in cells:
-    if not isinstance(cell, ParsedCheckinCell):
-      continue
-    local_str = cell.local_date.isoformat()
-    at_utc = utc_datetime_for_import(
-      d=cell.local_date,
-      time_cell=cell.time_raw,
-      status=cell.status,
-      tz_name=tz_name,
-    )
-    how = upsert_imported_checkin(
-      db,
-      nickname=cell.nickname,
-      checkin_date_local=local_str,
-      status=cell.status,
-      created_at=at_utc,
-    )
-    if how == "created":
-      created += 1
-    else:
-      replaced += 1
-  db.commit()
-  return created, replaced
-
-
 def create_attendance_import(
   db: Session, *, source_filename: str, ocr_raw_text: str, items: list[dict[str, object]]
 ) -> tuple[AttendanceImport, list[AttendanceImportItem]]:
@@ -441,71 +366,6 @@ def list_members(db: Session) -> list[Member]:
     .order_by(Member.name.asc(), Member.role.asc(), Member.goal.asc())
   )
   return list(db.scalars(stmt).all())
-
-
-def _member_parts_from_nickname(nickname: str) -> tuple[str, str, str]:
-  """
-  Convert check-in nickname text into member fields (name/role/goal).
-  Fallback keeps data valid when CSV has only a single display name.
-  """
-  parts = nickname.strip().split(maxsplit=2)
-  if len(parts) >= 3:
-    return parts[0], parts[1], parts[2]
-  if len(parts) == 2:
-    return parts[0], parts[1], ""
-  label = parts[0] if parts else nickname.strip()
-  return label, "", ""
-
-
-def ensure_members_from_nicknames(
-  db: Session, *, nicknames: list[str]
-) -> tuple[int, int, int]:
-  """
-  Ensure every nickname exists in members.
-  Returns (added_count, reactivated_count, already_active_count).
-  """
-  unique = sorted({n.strip() for n in nicknames if n and n.strip()})
-  added = 0
-  reactivated = 0
-  active = 0
-  now = datetime.now(timezone.utc)
-
-  for nickname in unique:
-    name, role, goal = _member_parts_from_nickname(nickname)
-    existing = list(
-      db.scalars(
-        select(Member)
-        .where(
-          Member.name == name,
-          Member.role == role,
-          Member.goal == goal,
-        )
-        .order_by(Member.id.asc())
-        .limit(1)
-      ).all()
-    )
-    if existing:
-      row = existing[0]
-      if row.is_active:
-        active += 1
-      else:
-        row.is_active = True
-        reactivated += 1
-      continue
-
-    db.add(
-      Member(
-        created_at=now,
-        name=name,
-        role=role,
-        goal=goal,
-        is_active=True,
-      )
-    )
-    added += 1
-
-  db.commit()
-  return added, reactivated, active
 
 
 def create_member(db: Session, *, name: str, role: str, goal: str) -> Member:
