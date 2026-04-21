@@ -39,6 +39,7 @@ function Layout() {
             </NavLink>
             <NavLink to="/statistics">{t('nav.statistics')}</NavLink>
             <NavLink to="/members">{t('nav.members')}</NavLink>
+            <NavLink to="/attendance/import">{t('nav.import')}</NavLink>
             {isFullEdition() ? (
               <NavLink to="/learning-goals">{t('nav.goals')}</NavLink>
             ) : null}

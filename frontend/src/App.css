@@ -820,7 +820,7 @@ button.secondary {
 .importTable {
   width: 100%;
   border-collapse: collapse;
-  min-width: 680px;
+  min-width: 520px;
 }
 
 .importTable th,
@@ -833,6 +833,13 @@ button.secondary {
 .importTable td input,
 .importTable td select {
   width: 100%;
+}
+
+.importNotesCell {
+  max-width: 14rem;
+  font-size: 13px;
+  vertical-align: top;
+  word-break: break-word;
 }
 
 .analytics {

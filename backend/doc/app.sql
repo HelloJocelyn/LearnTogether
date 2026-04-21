@@ -77,6 +77,9 @@ CREATE TABLE attendance_import_items (
 	attendance_status VARCHAR(20) NOT NULL,
 	confidence INTEGER NOT NULL,
 	is_edited BOOLEAN NOT NULL,
+	roll_number INTEGER,
+	notes TEXT,
+	detail_json TEXT,
 	PRIMARY KEY (id),
 	FOREIGN KEY(import_id) REFERENCES attendance_imports (id)
 );

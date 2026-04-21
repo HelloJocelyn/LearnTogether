@@ -46,6 +46,10 @@ class AttendanceImportItem(Base):
   attendance_status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
   confidence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
   is_edited: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+  # Early-session matrix CSV (番号 / 姓名 / per-day 状态·参加时间 / 出勤天数 / 备考)
+  roll_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+  notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+  detail_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class Member(Base):

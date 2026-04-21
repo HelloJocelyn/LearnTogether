@@ -53,6 +53,9 @@ class AttendanceImportItemOut(BaseModel):
   attendance_status: AttendanceStatus
   confidence: int
   is_edited: bool
+  roll_number: Optional[int] = None
+  notes: Optional[str] = None
+  detail_json: Optional[str] = None
 
 
 class AttendanceImportOut(BaseModel):

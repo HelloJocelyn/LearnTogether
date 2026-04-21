@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import {
   confirmAttendanceImport,
+  createAttendanceImportFromCsv,
   createAttendanceImportFromImage,
   type AttendanceImport,
   type AttendanceImportItem,
@@ -18,6 +19,8 @@ type EditableRow = {
   attendance_status: AttendanceStatus
   confidence?: number
   is_edited?: boolean
+  roll_number?: number | null
+  notes?: string | null
 }
 
 function toRows(items: AttendanceImportItem[]): EditableRow[] {
@@ -28,16 +31,15 @@ function toRows(items: AttendanceImportItem[]): EditableRow[] {
     attendance_status: item.attendance_status,
     confidence: item.confidence,
     is_edited: item.is_edited,
+    roll_number: item.roll_number ?? undefined,
+    notes: item.notes ?? undefined,
   }))
 }
 
-function statusLabel(
-  status: AttendanceStatus,
-  t: (key: string, vars?: Record<string, string | number>) => string
-) {
-  if (status === 'attended') return t('import.status.attended')
-  if (status === 'not_attended') return t('import.status.notAttended')
-  return t('import.status.unknown')
+function isCsvFile(file: File): boolean {
+  const name = file.name?.toLowerCase() ?? ''
+  const type = file.type ?? ''
+  return type === 'text/csv' || type === 'application/vnd.ms-excel' || name.endsWith('.csv')
 }
 
 export default function AttendanceImport() {
@@ -57,24 +59,15 @@ export default function AttendanceImport() {
     () => rows.filter((row) => row.name.trim().length === 0).length,
     [rows]
   )
-  const summary = useMemo(() => {
-    return rows.reduce(
-      (acc, row) => {
-        acc.total += 1
-        acc[row.attendance_status] += 1
-        return acc
-      },
-      { total: 0, attended: 0, not_attended: 0, unknown: 0 }
-    )
-  }, [rows])
-
   async function onRunMockOcr() {
     if (!sourceFile) return
     setLoading(true)
     setError(null)
     setSaveState(null)
     try {
-      const data = await createAttendanceImportFromImage(sourceFile)
+      const data = isCsvFile(sourceFile)
+        ? await createAttendanceImportFromCsv(sourceFile)
+        : await createAttendanceImportFromImage(sourceFile)
       setImportInfo(data.import_info)
       setRows(toRows(data.items))
     } catch (err: unknown) {
@@ -91,6 +84,10 @@ export default function AttendanceImport() {
     setSaveState(null)
     setError(null)
     if (!file) {
+      setSourcePreview(null)
+      return
+    }
+    if (isCsvFile(file)) {
       setSourcePreview(null)
       return
     }
@@ -113,6 +110,8 @@ export default function AttendanceImport() {
         localId: `new-${crypto.randomUUID()}`,
         name: '',
         attendance_status: 'unknown',
+        roll_number: undefined,
+        notes: undefined,
       },
     ])
   }
@@ -164,14 +163,7 @@ export default function AttendanceImport() {
       setRows(toRows(updated))
       const result = await confirmAttendanceImport(importId)
       setImportInfo((prev) => (prev ? { ...prev, status: result.status } : prev))
-      setSaveState(
-        t('import.confirmedSummary', {
-          total: result.total,
-          attended: result.attended,
-          notAttended: result.not_attended,
-          unknown: result.unknown,
-        })
-      )
+      setSaveState(t('import.confirmedSummarySimple', { total: result.total }))
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -202,30 +194,36 @@ export default function AttendanceImport() {
           <div className="row">
             <input
               type="file"
-              accept="image/*"
+              accept="image/*,.csv,text/csv"
               capture="environment"
               onChange={(e) => onSelectFile(e.target.files?.[0] ?? null)}
             />
             <button type="button" onClick={onRunMockOcr} disabled={!canUpload}>
-              {loading ? t('import.processing') : t('import.runMock')}
+              {loading
+                ? t('import.processing')
+                : sourceFile && isCsvFile(sourceFile)
+                  ? t('import.importCsv')
+                  : t('import.runMock')}
             </button>
           </div>
           {sourcePreview ? (
             <div className="importPreviewWrap">
               <img src={sourcePreview} alt={t('import.sourceAlt')} className="importPreview" />
             </div>
+          ) : sourceFile && isCsvFile(sourceFile) ? (
+            <p className="muted">{t('import.csvSelected', { name: sourceFile.name })}</p>
           ) : null}
         </section>
 
         <section className="card">
           <h2>{t('import.step2')}</h2>
           <div className="importSummary">
-            <span>{t('import.total', { count: summary.total })}</span>
-            <span>{t('import.attended', { count: summary.attended })}</span>
-            <span>{t('import.notAttended', { count: summary.not_attended })}</span>
-            <span>{t('import.unknown', { count: summary.unknown })}</span>
+            <span>{t('import.total', { count: rows.length })}</span>
             {importInfo ? <span>{t('import.status', { status: importInfo.status })}</span> : null}
           </div>
+          <p className="muted" style={{ marginTop: 8, marginBottom: 12 }}>
+            {t('import.step2MatrixHint')}
+          </p>
           {rows.length === 0 ? (
             <p className="muted">{t('import.noRows')}</p>
           ) : (
@@ -233,9 +231,9 @@ export default function AttendanceImport() {
               <table className="importTable">
                 <thead>
                   <tr>
+                    <th>{t('import.col.roll')}</th>
                     <th>{t('import.col.name')}</th>
-                    <th>{t('import.col.status')}</th>
-                    <th>{t('import.col.confidence')}</th>
+                    <th>{t('import.col.notes')}</th>
                     <th>{t('import.col.edited')}</th>
                     <th />
                   </tr>
@@ -243,6 +241,7 @@ export default function AttendanceImport() {
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.localId}>
+                      <td>{row.roll_number != null ? row.roll_number : ''}</td>
                       <td>
                         <input
                           value={row.name}
@@ -250,22 +249,7 @@ export default function AttendanceImport() {
                           disabled={disableEdit}
                         />
                       </td>
-                      <td>
-                        <select
-                          value={row.attendance_status}
-                          onChange={(e) =>
-                            updateRow(row.localId, {
-                              attendance_status: e.target.value as AttendanceStatus,
-                            })
-                          }
-                          disabled={disableEdit}
-                        >
-                          <option value="attended">{statusLabel('attended', t)}</option>
-                          <option value="not_attended">{statusLabel('not_attended', t)}</option>
-                          <option value="unknown">{statusLabel('unknown', t)}</option>
-                        </select>
-                      </td>
-                      <td>{typeof row.confidence === 'number' ? `${row.confidence}%` : '-'}</td>
+                      <td className="importNotesCell">{row.notes?.trim() ? row.notes : ''}</td>
                       <td>{row.is_edited ? t('import.yes') : t('import.no')}</td>
                       <td>
                         <button

@@ -115,3 +115,15 @@ def init_db() -> None:
         with engine.begin() as conn:
           conn.execute(text("ALTER TABLE learning_goals ADD COLUMN start_date DATE"))
 
+    if "attendance_import_items" in insp.get_table_names():
+      ai_cols = {c["name"] for c in insp.get_columns("attendance_import_items")}
+      if "roll_number" not in ai_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE attendance_import_items ADD COLUMN roll_number INTEGER"))
+      if "notes" not in ai_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE attendance_import_items ADD COLUMN notes TEXT"))
+      if "detail_json" not in ai_cols:
+        with engine.begin() as conn:
+          conn.execute(text("ALTER TABLE attendance_import_items ADD COLUMN detail_json TEXT"))
+

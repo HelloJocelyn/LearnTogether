@@ -1,3 +1,6 @@
+import csv
+import io
+import json
 import logging
 import mimetypes
 import os
@@ -45,6 +48,7 @@ def require_full_edition() -> None:
 
 
 _BADGE_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_MATRIX_DATE_CELL = re.compile(r"^\d{1,2}/\d{1,2}$")
 
 
 def _today_checkin_tz() -> date:
@@ -452,12 +456,294 @@ def update_zoom_join_hints(payload: schemas.ZoomJoinHintsIn):
 
 
 def _normalize_status(raw: str) -> schemas.AttendanceStatus:
-  value = raw.strip().lower()
+  trimmed = raw.strip()
+  value = trimmed.lower()
   if value in {"attended", "present", "yes", "y", "1"}:
     return "attended"
   if value in {"not attended", "absent", "no", "n", "0", "not_attended"}:
     return "not_attended"
+  if trimmed in {"出席", "到", "参加"}:
+    return "attended"
+  if trimmed in {"缺席", "缺", "未出席"}:
+    return "not_attended"
   return "unknown"
+
+
+def _decode_csv_bytes(content: bytes) -> str:
+  for enc in ("utf-8-sig", "utf-8", "gbk", "gb2312"):
+    try:
+      return content.decode(enc)
+    except UnicodeDecodeError:
+      continue
+  raise ValueError("Could not decode CSV (try UTF-8 or GBK)")
+
+
+def _csv_row_looks_like_header(row: list[str]) -> bool:
+  for c in row:
+    cl = c.strip()
+    if not cl:
+      continue
+    low = cl.lower()
+    if low in {"name", "nickname", "status", "attendance", "state"}:
+      return True
+    if cl in {"姓名", "名字", "出席", "状态"}:
+      return True
+  return False
+
+
+def _csv_find_name_column(header_row: list[str]) -> int:
+  for i, c in enumerate(header_row):
+    cl = c.strip()
+    low = cl.lower()
+    if low in {"name", "nickname"} or cl in {"姓名", "名字"}:
+      return i
+  return 0
+
+
+def _csv_find_status_column(header_row: list[str]) -> Optional[int]:
+  for i, c in enumerate(header_row):
+    cl = c.strip()
+    low = cl.lower()
+    if low in {"status", "attendance", "state"} or cl in {"出席", "状态"}:
+      return i
+  return None
+
+
+def _looks_like_early_session_matrix(rows: list[list[str]]) -> bool:
+  for row in rows[:40]:
+    if len(row) >= 2 and row[0].strip() == "番号" and row[1].strip() == "姓名":
+      return True
+  return False
+
+
+def _find_matrix_header_row(rows: list[list[str]]) -> Optional[int]:
+  for i, row in enumerate(rows):
+    if len(row) >= 2 and row[0].strip() == "番号" and row[1].strip() == "姓名":
+      return i
+  return None
+
+
+def _matrix_mark_bucket(cell: str) -> str:
+  s = cell.strip()
+  if not s:
+    return "empty"
+  if "√" in s or s in {"✓"}:
+    return "check"
+  if "迟" in s:
+    return "late"
+  if "请" in s:
+    return "leave"
+  return "other"
+
+
+def _aggregate_matrix_row_status(counts: dict[str, int]) -> schemas.AttendanceStatus:
+  check = counts.get("check", 0)
+  late = counts.get("late", 0)
+  leave = counts.get("leave", 0)
+  present = check + late
+  if present == 0 and leave == 0:
+    return "unknown"
+  if leave > present:
+    return "not_attended"
+  return "attended"
+
+
+def _parse_sheet_period_year_month(sheet_title: str) -> tuple[int, int]:
+  m = re.search(r"(\d{4})\s*年\s*(\d{1,2})\s*月", sheet_title or "")
+  if m:
+    return int(m.group(1)), int(m.group(2))
+  tz_name = os.getenv("CHECKIN_TZ", "Asia/Tokyo")
+  local_now = datetime.now(ZoneInfo(tz_name))
+  return local_now.year, local_now.month
+
+
+def _parse_early_session_matrix(all_rows: list[list[str]], raw_text: str) -> tuple[str, list[dict[str, object]]]:
+  hi = _find_matrix_header_row(all_rows)
+  if hi is None:
+    raise ValueError("Missing 番号 / 姓名 header row")
+
+  header_row = all_rows[hi]
+  attendance_col_idx: Optional[int] = None
+  notes_col_idx: Optional[int] = None
+  for j, c in enumerate(header_row):
+    t = c.strip()
+    if t == "出勤天数":
+      attendance_col_idx = j
+    elif t in {"备考", "备注"}:
+      notes_col_idx = j
+
+  if attendance_col_idx is not None and attendance_col_idx > 2:
+    num_pairs = (attendance_col_idx - 2) // 2
+  else:
+    num_pairs = 0
+    col = 2
+    while col + 1 < len(header_row):
+      lab = header_row[col].strip()
+      if _MATRIX_DATE_CELL.match(lab):
+        num_pairs += 1
+        col += 2
+      else:
+        break
+
+  if num_pairs <= 0:
+    raise ValueError("Could not detect day columns (expected headers like 4/1, 4/2, …)")
+
+  if notes_col_idx is None and attendance_col_idx is not None:
+    notes_col_idx = attendance_col_idx + 1
+
+  day_labels: list[str] = []
+  for k in range(num_pairs):
+    idx = 2 + 2 * k
+    lab = header_row[idx].strip() if idx < len(header_row) else ""
+    day_labels.append(lab if lab else f"day{k + 1}")
+
+  sheet_title = ""
+  if hi > 0 and all_rows[0]:
+    sheet_title = all_rows[0][0].strip()
+
+  period_year, period_month = _parse_sheet_period_year_month(sheet_title)
+
+  items: list[dict[str, object]] = []
+  for row in all_rows[hi + 2 :]:
+    if not row or not any(x.strip() for x in row):
+      continue
+    if row[0].strip().startswith("说明"):
+      break
+    if len(row) < 2:
+      continue
+    name = row[1].strip()
+    if not name:
+      continue
+
+    roll_raw = row[0].strip()
+    roll_num: Optional[int] = int(roll_raw) if roll_raw.isdigit() else None
+
+    counts = {"check": 0, "late": 0, "leave": 0, "other": 0, "empty": 0}
+    daily: list[dict[str, str]] = []
+    for k in range(num_pairs):
+      sc = 2 + 2 * k
+      tc = 3 + 2 * k
+      mark_cell = row[sc].strip() if sc < len(row) else ""
+      time_cell = row[tc].strip() if tc < len(row) else ""
+      bucket = _matrix_mark_bucket(mark_cell)
+      if bucket == "empty" and not time_cell:
+        counts["empty"] += 1
+      elif bucket == "check":
+        counts["check"] += 1
+      elif bucket == "late":
+        counts["late"] += 1
+      elif bucket == "leave":
+        counts["leave"] += 1
+      else:
+        counts["other"] += 1
+      if mark_cell or time_cell:
+        daily.append(
+          {
+            "date": day_labels[k] if k < len(day_labels) else str(k + 1),
+            "status": mark_cell,
+            "time": time_cell,
+          }
+        )
+
+    agg = _aggregate_matrix_row_status(counts)
+
+    days_present_cell = ""
+    if attendance_col_idx is not None and attendance_col_idx < len(row):
+      days_present_cell = row[attendance_col_idx].strip()
+
+    notes_cell = ""
+    if notes_col_idx is not None and notes_col_idx < len(row):
+      notes_cell = row[notes_col_idx].strip()
+
+    reported_days: Optional[int] = None
+    if days_present_cell.isdigit():
+      reported_days = int(days_present_cell)
+
+    detail = {
+      "format": "early_session_matrix_v1",
+      "sheet_title": sheet_title,
+      "period_year": period_year,
+      "period_month": period_month,
+      "day_labels": day_labels,
+      "counts": counts,
+      "days_present_reported": reported_days,
+      "days_present_cell": days_present_cell,
+      "daily": daily,
+    }
+
+    items.append(
+      {
+        "name": name,
+        "attendance_status": agg,
+        "confidence": 100,
+        "roll_number": roll_num,
+        "notes": notes_cell or None,
+        "detail_json": json.dumps(detail, ensure_ascii=False),
+      }
+    )
+
+  if not items:
+    raise ValueError("No participant rows found under the matrix header")
+
+  return raw_text, items
+
+
+def _parse_csv_attendance(content: bytes) -> tuple[str, list[dict[str, object]]]:
+  text = _decode_csv_bytes(content)
+  lines = text.splitlines()
+  if not lines:
+    raise ValueError("CSV is empty")
+
+  sample = "\n".join(lines[: min(12, len(lines))])
+  try:
+    dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+  except csv.Error:
+    dialect = csv.excel
+
+  reader = csv.reader(io.StringIO(text), dialect)
+  all_rows = [[cell.strip() for cell in row] for row in reader]
+
+  if _looks_like_early_session_matrix(all_rows):
+    return _parse_early_session_matrix(all_rows, text)
+
+  parsed_rows = [r for r in all_rows if any(cell for cell in r)]
+  if not parsed_rows:
+    raise ValueError("No data rows in CSV")
+
+  first = parsed_rows[0]
+  header = _csv_row_looks_like_header(first)
+  if header:
+    name_idx = _csv_find_name_column(first)
+    status_idx = _csv_find_status_column(first)
+    if status_idx is None and len(first) >= 2:
+      status_idx = next((i for i in range(len(first)) if i != name_idx), None)
+    body_rows = parsed_rows[1:]
+  else:
+    name_idx = 0
+    status_idx = 1 if len(first) > 1 else None
+    body_rows = parsed_rows
+
+  items: list[dict[str, object]] = []
+  for row in body_rows:
+    raw_name = row[name_idx].strip() if name_idx < len(row) else ""
+    if not raw_name:
+      continue
+    status_raw = ""
+    if status_idx is not None and status_idx < len(row):
+      status_raw = row[status_idx].strip()
+    status = _normalize_status(status_raw) if status_raw else "unknown"
+    items.append(
+      {
+        "name": raw_name,
+        "attendance_status": status,
+        "confidence": 100,
+      }
+    )
+
+  if not items:
+    raise ValueError("No data rows with a non-empty name")
+
+  return text, items
 
 
 def _fake_ocr_items_from_filename(filename: str) -> tuple[str, list[dict[str, object]]]:
@@ -519,6 +805,29 @@ async def create_attendance_import_from_ocr(
   raw_text, parsed_items = _fake_ocr_items_from_filename(image.filename)
   record, items = crud.create_attendance_import(
     db, source_filename=image.filename, ocr_raw_text=raw_text, items=parsed_items
+  )
+  return schemas.AttendanceImportOcrOut(import_info=record, items=items)
+
+
+@app.post("/api/attendance-imports/csv", response_model=schemas.AttendanceImportOcrOut)
+async def create_attendance_import_from_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+  if not file.filename:
+    raise HTTPException(status_code=400, detail="filename is required")
+
+  content = await file.read()
+  if not content:
+    raise HTTPException(status_code=400, detail="file is empty")
+
+  try:
+    raw_text, parsed_items = _parse_csv_attendance(content)
+  except ValueError as exc:
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+  record, items = crud.create_attendance_import(
+    db,
+    source_filename=file.filename or "upload.csv",
+    ocr_raw_text=raw_text,
+    items=parsed_items,
   )
   return schemas.AttendanceImportOcrOut(import_info=record, items=items)
 

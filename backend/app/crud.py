@@ -1,5 +1,8 @@
 from datetime import date, datetime, time, timezone, timedelta
+import json
 import logging
+import os
+import re
 from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -250,12 +253,24 @@ def create_attendance_import(
 
   created_items: list[AttendanceImportItem] = []
   for item in items:
+    rn = item.get("roll_number")
+    roll_number: Optional[int]
+    if isinstance(rn, int):
+      roll_number = rn
+    elif isinstance(rn, str) and rn.strip().isdigit():
+      roll_number = int(rn.strip())
+    else:
+      roll_number = None
+    notes_raw = item.get("notes")
     created = AttendanceImportItem(
       import_id=record.id,
       name=str(item["name"]),
       attendance_status=str(item["attendance_status"]),
       confidence=int(item.get("confidence", 0)),
       is_edited=False,
+      roll_number=roll_number,
+      notes=str(notes_raw).strip() if notes_raw else None,
+      detail_json=str(item["detail_json"]) if item.get("detail_json") else None,
     )
     db.add(created)
     created_items.append(created)
@@ -334,6 +349,166 @@ def update_attendance_import_items(
   )
 
 
+def upsert_checkin_from_import(
+  db: Session,
+  *,
+  nickname: str,
+  checkin_date_local: str,
+  status: str,
+  tz_name: str,
+) -> None:
+  trimmed = (nickname or "").strip()
+  if not trimmed:
+    return
+  if len(trimmed) > 80:
+    trimmed = trimmed[:80]
+  allowed = {"morning", "night", "normal", "late", "leave", "outside"}
+  st = status if status in allowed else "outside"
+  is_real = st in {"morning", "night", "normal", "late"}
+
+  existing = db.scalar(
+    select(CheckIn).where(
+      CheckIn.nickname == trimmed,
+      CheckIn.checkin_date_local == checkin_date_local,
+    )
+  )
+  created_at = _local_date_noon_utc(checkin_date_local, tz_name)
+  if existing:
+    existing.status = st
+    existing.is_real = is_real
+    return
+
+  row = CheckIn(
+    created_at=created_at,
+    nickname=trimmed,
+    checkin_date_local=checkin_date_local,
+    status=st,
+    is_real=is_real,
+  )
+  db.add(row)
+
+
+def ensure_member_from_import(db: Session, *, name: str) -> Optional[Member]:
+  trimmed = (name or "").strip()
+  if not trimmed:
+    return None
+  if len(trimmed) > 80:
+    trimmed = trimmed[:80]
+  existing = db.scalar(
+    select(Member).where(Member.name == trimmed, Member.is_active.is_(True)).limit(1)
+  )
+  if existing:
+    return existing
+  now = datetime.now(timezone.utc)
+  row = Member(created_at=now, name=trimmed, role="", goal="", is_active=True)
+  db.add(row)
+  db.flush()
+  return row
+
+
+def _local_date_noon_utc(local_date_str: str, tz_name: str) -> datetime:
+  d = date.fromisoformat(local_date_str)
+  local_dt = datetime(d.year, d.month, d.day, 12, 0, 0, tzinfo=ZoneInfo(tz_name))
+  return local_dt.astimezone(timezone.utc)
+
+
+def _import_mark_bucket(mark: str) -> str:
+  s = (mark or "").strip()
+  if not s:
+    return "empty"
+  if "√" in s or s in {"✓"}:
+    return "check"
+  if "迟" in s:
+    return "late"
+  if "请" in s:
+    return "leave"
+  return "other"
+
+
+def _bucket_to_checkin_status(bucket: str) -> Optional[str]:
+  if bucket == "check":
+    return "morning"
+  if bucket == "late":
+    return "late"
+  if bucket == "leave":
+    return "leave"
+  return None
+
+
+def _matrix_day_label_to_iso(label: str, year: int) -> Optional[str]:
+  lab = (label or "").strip()
+  mm = re.match(r"^(\d{1,2})/(\d{1,2})$", lab)
+  if not mm:
+    return None
+  month_part = int(mm.group(1))
+  day_part = int(mm.group(2))
+  try:
+    return date(year, month_part, day_part).isoformat()
+  except ValueError:
+    return None
+
+
+def apply_attendance_import_side_effects(db: Session, *, import_id: int) -> None:
+  """After marking import confirmed: upsert members (name, empty role/goal) and check-ins for statistics."""
+  items = list(
+    db.scalars(
+      select(AttendanceImportItem).where(AttendanceImportItem.import_id == import_id).order_by(AttendanceImportItem.id.asc())
+    ).all()
+  )
+  tz_name = _checkin_tz_default()
+
+  for item in items:
+    ensure_member_from_import(db, name=item.name)
+
+    if item.detail_json:
+      try:
+        data = json.loads(item.detail_json)
+      except json.JSONDecodeError:
+        continue
+      if data.get("format") == "early_session_matrix_v1":
+        year = int(data.get("period_year") or date.today().year)
+        for entry in data.get("daily") or []:
+          mark = (entry.get("status") or "").strip()
+          if not mark:
+            continue
+          bucket = _import_mark_bucket(mark)
+          st = _bucket_to_checkin_status(bucket)
+          if st is None:
+            continue
+          label = entry.get("date") or ""
+          local_date = _matrix_day_label_to_iso(label, year)
+          if not local_date:
+            continue
+          upsert_checkin_from_import(
+            db,
+            nickname=item.name,
+            checkin_date_local=local_date,
+            status=st,
+            tz_name=tz_name,
+          )
+        continue
+
+    flat_status = item.attendance_status
+    if flat_status == "attended":
+      st = "morning"
+    elif flat_status == "not_attended":
+      st = "outside"
+    else:
+      st = "outside"
+    today = datetime.now(ZoneInfo(tz_name)).date().isoformat()
+    upsert_checkin_from_import(
+      db,
+      nickname=item.name,
+      checkin_date_local=today,
+      status=st,
+      tz_name=tz_name,
+    )
+
+
+def _checkin_tz_default() -> str:
+  return os.getenv("CHECKIN_TZ", "Asia/Tokyo")
+
+
 def confirm_attendance_import(
   db: Session, *, import_id: int
 ) -> Tuple[Optional[AttendanceImport], dict[str, int]]:
@@ -354,6 +529,8 @@ def confirm_attendance_import(
       counts["unknown"] += 1
 
   record.status = "confirmed"
+  db.flush()
+  apply_attendance_import_side_effects(db, import_id=import_id)
   db.commit()
   db.refresh(record)
   return record, counts

@@ -56,6 +56,9 @@ export type AttendanceImportItem = {
   attendance_status: AttendanceStatus
   confidence: number
   is_edited: boolean
+  roll_number?: number | null
+  notes?: string | null
+  detail_json?: string | null
 }
 
 export type AttendanceImportDetail = {
@@ -129,6 +132,15 @@ export function createAttendanceImportFromImage(file: File) {
   const formData = new FormData()
   formData.append('image', file)
   return request<AttendanceImportDetail>('/api/attendance-imports/ocr', {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+export function createAttendanceImportFromCsv(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request<AttendanceImportDetail>('/api/attendance-imports/csv', {
     method: 'POST',
     body: formData,
   })
