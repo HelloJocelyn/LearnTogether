@@ -196,6 +196,67 @@ def list_checkins(
   return rows
 
 
+_MAX_CHECKIN_CSV_BYTES = 8 * 1024 * 1024
+
+
+@app.post("/api/checkins/import-csv", response_model=schemas.CheckinCsvImportOut)
+async def import_checkins_from_csv(
+  file: UploadFile = File(...),
+  default_year: Optional[int] = Form(None),
+  db: Session = Depends(get_db),
+):
+  """
+  Import morning check-in rows from an Excel UTF-8 CSV (早自习格式: 番号/姓名 + 状态/参加时间 per day).
+  Replaces any existing check-in for the same nickname and local calendar day in the sheet.
+  """
+  if not file.filename:
+    raise HTTPException(status_code=400, detail="file is required")
+  if not (file.filename.lower().endswith(".csv") or "csv" in (file.content_type or "")):
+    # Some browsers omit type; allow .csv by name.
+    if not file.filename.lower().endswith(".csv"):
+      raise HTTPException(status_code=400, detail="expected a .csv file")
+
+  content = await file.read()
+  if not content:
+    raise HTTPException(status_code=400, detail="file is empty")
+  if len(content) > _MAX_CHECKIN_CSV_BYTES:
+    raise HTTPException(status_code=400, detail="file is too large (max 8MB)")
+
+  from .checkin_csv_import import parse_checkin_csv_bytes
+
+  try:
+    cells, meta = parse_checkin_csv_bytes(content, default_year=default_year)
+  except ValueError as exc:
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+  warnings = [str(w) for w in (meta.get("warnings") or [])]
+  skipped = int(meta.get("skipped_unknown_status_cells") or 0)
+  year = int(meta["resolved_year"])
+  ty = meta.get("title_year")
+  tm = meta.get("title_month")
+
+  tz_name = os.getenv("CHECKIN_TZ") or "Asia/Tokyo"
+  created, replaced = crud.import_checkins_from_parsed_cells(db, cells, tz_name=tz_name)
+  members_added, members_reactivated, members_already_active = crud.ensure_members_from_nicknames(
+    db, nicknames=[c.nickname for c in cells]
+  )
+
+  return schemas.CheckinCsvImportOut(
+    filename=file.filename,
+    resolved_year=year,
+    title_year=ty if isinstance(ty, int) else None,
+    title_month=tm if isinstance(tm, int) else None,
+    parse_warnings=warnings,
+    skipped_unknown_status_cells=skipped,
+    parsed_cells=len(cells),
+    created=created,
+    replaced=replaced,
+    members_added=members_added,
+    members_reactivated=members_reactivated,
+    members_already_active=members_already_active,
+  )
+
+
 @app.post("/api/checkins", response_model=schemas.CheckInOut)
 def create_checkin(payload: schemas.CheckInCreate, db: Session = Depends(get_db)):
   nickname = payload.nickname.strip()

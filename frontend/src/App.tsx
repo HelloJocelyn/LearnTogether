@@ -6,6 +6,7 @@ import { isFullEdition } from './edition'
 import Home from './pages/Home'
 import Join from './pages/Join'
 import AttendanceImport from './pages/AttendanceImport'
+import CheckinImport from './pages/CheckinImport'
 import Statistics from './pages/Statistics'
 import Members from './pages/Members'
 import Settings from './pages/Settings'
@@ -39,6 +40,7 @@ function Layout() {
             </NavLink>
             <NavLink to="/statistics">{t('nav.statistics')}</NavLink>
             <NavLink to="/members">{t('nav.members')}</NavLink>
+            <NavLink to="/checkins/import">{t('nav.checkinImport')}</NavLink>
             {isFullEdition() ? (
               <NavLink to="/learning-goals">{t('nav.goals')}</NavLink>
             ) : null}
@@ -86,6 +88,7 @@ function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/join" element={<Join />} />
           <Route path="/attendance/import" element={<AttendanceImport />} />
+          <Route path="/checkins/import" element={<CheckinImport />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

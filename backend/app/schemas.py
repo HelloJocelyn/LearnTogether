@@ -34,6 +34,21 @@ class CheckInOut(BaseModel):
   checkin_date_local: Optional[str] = None
 
 
+class CheckinCsvImportOut(BaseModel):
+  filename: str
+  resolved_year: int
+  title_year: Optional[int] = None
+  title_month: Optional[int] = None
+  parse_warnings: list[str] = Field(default_factory=list)
+  skipped_unknown_status_cells: int = 0
+  parsed_cells: int = 0
+  created: int = 0
+  replaced: int = 0
+  members_added: int = 0
+  members_reactivated: int = 0
+  members_already_active: int = 0
+
+
 AttendanceStatus = Literal["attended", "not_attended", "unknown"]
 AttendanceImportStatus = Literal["draft", "confirmed", "failed"]
 
