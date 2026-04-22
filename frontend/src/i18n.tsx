@@ -46,6 +46,14 @@ const dictionaries: Record<Lang, Dict> = {
     'home.outsideWindowBadge': 'Outside configured window',
     'home.nameFormatError': 'Name must be in format: "{format}"',
     'home.applyLeave': 'Apply leave',
+    'home.scheduleLeaveHint':
+      'Schedule leave for future dates (check-in timezone). Choose start and end dates; both days are inclusive.',
+    'home.scheduleLeaveStartLabel': 'Start date',
+    'home.scheduleLeaveEndLabel': 'End date',
+    'home.scheduleLeaveRangeError': 'End date must be on or after start date.',
+    'home.scheduleLeaveSubmit': 'Schedule leave',
+    'home.futureLeaveSubmittedMsg':
+      'Leave submitted from {start} through {end} ({count} calendar days).',
     'home.leaveSubmittedMsg': 'Leave has been submitted for today.',
     'home.status.morning': 'Morning session',
     'home.status.night': 'Night session',
@@ -244,6 +252,10 @@ const dictionaries: Record<Lang, Dict> = {
     'stats.memberMonthlySummaryTitle': 'Member attendance summary ({month} {year})',
     'stats.memberMonthlySummaryEmpty': 'No attendance records for this month yet.',
     'stats.memberMonthlySummaryTotal': 'Total',
+    'stats.cellEditHint': 'Click to edit attendance',
+    'stats.cellPickerTitle': 'Set attendance',
+    'stats.cellClearAttendance': 'Remove check-in',
+    'stats.cellSaving': 'Saving…',
 
     'join.title': 'Join',
     'join.tagline': 'One step every day, together',
@@ -259,6 +271,14 @@ const dictionaries: Record<Lang, Dict> = {
     'join.editNickname': 'Edit nickname',
     'join.redirectHint': "After saving your nickname, we'll redirect you to Zoom.",
     'join.applyLeave': 'Apply leave',
+    'join.scheduleLeaveHint':
+      'Schedule leave for future dates (check-in timezone). Choose start and end dates; both days are inclusive.',
+    'join.scheduleLeaveStartLabel': 'Start date',
+    'join.scheduleLeaveEndLabel': 'End date',
+    'join.scheduleLeaveRangeError': 'End date must be on or after start date.',
+    'join.scheduleLeaveSubmit': 'Schedule leave',
+    'join.futureLeaveSubmittedMsg':
+      'Leave submitted from {start} through {end} ({count} calendar days).',
     'join.leaveSubmittedMsg': 'Leave has been submitted for today.',
 
     'import.title': 'Attendance Import',
@@ -334,6 +354,14 @@ const dictionaries: Record<Lang, Dict> = {
     'home.studyCatAlt': '学习猫咪',
     'home.dailyHeroAlt': '今日学习插画',
     'home.applyLeave': '请假',
+    'home.scheduleLeaveHint':
+      '预约未来请假（与签到时区日历一致）：选择开始日与结束日，首尾两天都算作请假。',
+    'home.scheduleLeaveStartLabel': '开始日期',
+    'home.scheduleLeaveEndLabel': '结束日期',
+    'home.scheduleLeaveRangeError': '结束日期不能早于开始日期。',
+    'home.scheduleLeaveSubmit': '预约请假',
+    'home.futureLeaveSubmittedMsg':
+      '已提交请假：{start} 至 {end}（共 {count} 天）。',
     'home.leaveSubmittedMsg': '今天已提交请假。',
     'home.status.morning': '早间场次',
     'home.status.night': '晚间场次',
@@ -536,6 +564,10 @@ const dictionaries: Record<Lang, Dict> = {
     'stats.memberMonthlySummaryTitle': '成员月度签到汇总（{year}年{month}）',
     'stats.memberMonthlySummaryEmpty': '本月暂无签到记录。',
     'stats.memberMonthlySummaryTotal': '合计',
+    'stats.cellEditHint': '点击修改当日签到状态',
+    'stats.cellPickerTitle': '设置签到状态',
+    'stats.cellClearAttendance': '移除该日签到记录',
+    'stats.cellSaving': '保存中…',
 
     'join.title': '加入',
     'join.tagline': '今天也一起，前进一步',
@@ -550,6 +582,14 @@ const dictionaries: Record<Lang, Dict> = {
     'join.editNickname': '修改昵称',
     'join.redirectHint': '保存昵称后，我们会自动跳转到 Zoom。',
     'join.applyLeave': '请假',
+    'join.scheduleLeaveHint':
+      '预约未来请假（与签到时区日历一致）：选择开始日与结束日，首尾两天都算作请假。',
+    'join.scheduleLeaveStartLabel': '开始日期',
+    'join.scheduleLeaveEndLabel': '结束日期',
+    'join.scheduleLeaveRangeError': '结束日期不能早于开始日期。',
+    'join.scheduleLeaveSubmit': '预约请假',
+    'join.futureLeaveSubmittedMsg':
+      '已提交请假：{start} 至 {end}（共 {count} 天）。',
     'join.leaveSubmittedMsg': '今天已提交请假。',
 
     'import.title': '考勤导入',
@@ -627,6 +667,14 @@ const dictionaries: Record<Lang, Dict> = {
     'home.studyCatAlt': '勉強中の猫',
     'home.dailyHeroAlt': '今日の学習イラスト',
     'home.applyLeave': '欠席申請',
+    'home.scheduleLeaveHint':
+      '将来の欠席は、チェックインのタイムゾーンでの開始日と終了日を選びます（両端を含む）。',
+    'home.scheduleLeaveStartLabel': '開始日',
+    'home.scheduleLeaveEndLabel': '終了日',
+    'home.scheduleLeaveRangeError': '終了日は開始日以降である必要があります。',
+    'home.scheduleLeaveSubmit': '欠席を予約',
+    'home.futureLeaveSubmittedMsg':
+      '{start}〜{end} の欠席を申請しました（{count} 日間）。',
     'home.leaveSubmittedMsg': '本日の欠席申請を受け付けました。',
     'home.status.morning': '朝のセッション',
     'home.status.night': '夜のセッション',
@@ -831,6 +879,10 @@ const dictionaries: Record<Lang, Dict> = {
     'stats.memberMonthlySummaryTitle': 'メンバー月次サマリー（{year}年 {month}）',
     'stats.memberMonthlySummaryEmpty': '今月の記録はまだありません。',
     'stats.memberMonthlySummaryTotal': '合計',
+    'stats.cellEditHint': 'クリックして出席状態を変更',
+    'stats.cellPickerTitle': '出席を設定',
+    'stats.cellClearAttendance': 'この日のチェックインを削除',
+    'stats.cellSaving': '保存中…',
 
     'join.title': '参加',
     'join.tagline': '今日も一緒に、一歩ずつ',
@@ -845,6 +897,14 @@ const dictionaries: Record<Lang, Dict> = {
     'join.editNickname': 'ニックネームを編集',
     'join.redirectHint': 'ニックネーム保存後、Zoomへリダイレクトします。',
     'join.applyLeave': '欠席申請',
+    'join.scheduleLeaveHint':
+      '将来の欠席は、チェックインのタイムゾーンでの開始日と終了日を選びます（両端を含む）。',
+    'join.scheduleLeaveStartLabel': '開始日',
+    'join.scheduleLeaveEndLabel': '終了日',
+    'join.scheduleLeaveRangeError': '終了日は開始日以降である必要があります。',
+    'join.scheduleLeaveSubmit': '欠席を予約',
+    'join.futureLeaveSubmittedMsg':
+      '{start}〜{end} の欠席を申請しました（{count} 日間）。',
     'join.leaveSubmittedMsg': '本日の欠席申請を受け付けました。',
 
     'import.title': '出席インポート',

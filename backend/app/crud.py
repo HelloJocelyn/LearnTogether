@@ -144,10 +144,16 @@ def list_checkins_range(
         start_utc.isoformat(),
         end_utc.isoformat(),
       )
+      # Rows with an explicit local date must match that day (scheduled leave for future dates
+      # must not appear when querying "today" via created_at alone).
+      legacy_no_local_date = or_(
+        CheckIn.checkin_date_local.is_(None),
+        CheckIn.checkin_date_local == '',
+      )
       stmt = stmt.where(
         or_(
           CheckIn.checkin_date_local.in_(sorted(variants)),
-          and_(CheckIn.created_at >= start_utc, CheckIn.created_at < end_utc),
+          and_(legacy_no_local_date, CheckIn.created_at >= start_utc, CheckIn.created_at < end_utc),
         )
       )
     else:
@@ -182,14 +188,17 @@ def create_checkin(
   # Prevent duplicate check-ins for the same nickname within the same *local* day.
   # Keep the earliest one.
   local_now = now.astimezone(ZoneInfo(tz_name)) if tz_name else now.astimezone()
-  local_date_text = local_now.date().isoformat()
+  today_local_iso = local_now.date().isoformat()
+
+  target_date_text = today_local_iso
+
   existing = list(
     db.scalars(
       select(CheckIn)
       .where(
         and_(
           CheckIn.nickname == nickname,
-          CheckIn.checkin_date_local == local_date_text,
+          CheckIn.checkin_date_local == target_date_text,
         )
       )
       .order_by(CheckIn.created_at.asc(), CheckIn.id.asc())
@@ -228,7 +237,7 @@ def create_checkin(
   checkin = CheckIn(
     created_at=now,
     nickname=nickname,
-    checkin_date_local=local_date_text,
+    checkin_date_local=target_date_text,
     status=status,
     is_real=status in {"morning", "night", "normal", "late"},
   )
@@ -236,6 +245,150 @@ def create_checkin(
   db.commit()
   db.refresh(checkin)
   return checkin
+
+
+def upsert_attendance_cell(
+  db: Session,
+  *,
+  nickname: str,
+  checkin_date_local: str,
+  status: Optional[str],
+) -> list[CheckIn]:
+  """Update or insert attendance for one nickname + local date; delete rows when status is None."""
+  raw_nick = nickname.strip()
+  if not raw_nick:
+    raise ValueError('nickname is required')
+  ds = checkin_date_local.strip()
+  try:
+    date.fromisoformat(ds)
+  except ValueError as exc:
+    raise ValueError('checkin_date_local must be YYYY-MM-DD') from exc
+
+  rows = list(
+    db.scalars(
+      select(CheckIn)
+      .where(and_(CheckIn.nickname == raw_nick, CheckIn.checkin_date_local == ds))
+      .order_by(CheckIn.id.asc())
+    ).all()
+  )
+
+  if status is None:
+    try:
+      for r in rows:
+        db.delete(r)
+      db.commit()
+    except Exception:
+      db.rollback()
+      raise
+    return []
+
+  allowed = {'morning', 'night', 'normal', 'late', 'leave', 'outside'}
+  if status not in allowed:
+    raise ValueError(f'invalid status: {status}')
+  real = status in {'morning', 'night', 'normal', 'late'}
+  now = datetime.now(timezone.utc)
+
+  try:
+    if not rows:
+      row = CheckIn(
+        created_at=now,
+        nickname=raw_nick,
+        checkin_date_local=ds,
+        status=status,
+        is_real=real,
+      )
+      db.add(row)
+      db.commit()
+      db.refresh(row)
+      return [row]
+
+    for r in rows:
+      r.status = status
+      r.is_real = real
+    db.commit()
+    for r in rows:
+      db.refresh(r)
+    return rows
+  except Exception:
+    db.rollback()
+    raise
+
+
+def create_scheduled_leave_period(
+  db: Session,
+  *,
+  nickname: str,
+  leave_start_date_local: str,
+  leave_end_date_local: str,
+  tz_name: Optional[str] = None,
+) -> list[CheckIn]:
+  """One leave check-in row per calendar day from start through end (inclusive), all strictly after today local."""
+  now = datetime.now(timezone.utc)
+  local_now = now.astimezone(ZoneInfo(tz_name)) if tz_name else now.astimezone()
+  today_local_d = local_now.date()
+
+  try:
+    start_d = date.fromisoformat(leave_start_date_local.strip())
+    end_d = date.fromisoformat(leave_end_date_local.strip())
+  except ValueError as exc:
+    raise ValueError('leave dates must be YYYY-MM-DD') from exc
+
+  if start_d > end_d:
+    raise ValueError('leave start date must be on or before end date')
+  if start_d <= today_local_d:
+    raise ValueError('scheduled leave must start after today in the check-in timezone')
+  max_end = today_local_d + timedelta(days=366)
+  if end_d > max_end:
+    raise ValueError('scheduled leave end date is too far in the future')
+  if (end_d - start_d).days > 366:
+    raise ValueError('leave period cannot exceed 366 days')
+
+  results: list[CheckIn] = []
+  try:
+    d = start_d
+    while d <= end_d:
+      ds = d.isoformat()
+      existing = list(
+        db.scalars(
+          select(CheckIn)
+          .where(
+            and_(
+              CheckIn.nickname == nickname,
+              CheckIn.checkin_date_local == ds,
+            )
+          )
+          .order_by(CheckIn.created_at.asc(), CheckIn.id.asc())
+          .limit(1)
+        ).all()
+      )
+      if existing:
+        row = existing[0]
+        if row.status == 'leave':
+          results.append(row)
+        else:
+          raise ValueError(
+            f'{ds} already has a check-in with status "{row.status}"; remove or resolve it before scheduling leave'
+          )
+      else:
+        row = CheckIn(
+          created_at=now,
+          nickname=nickname,
+          checkin_date_local=ds,
+          status='leave',
+          is_real=False,
+        )
+        db.add(row)
+        db.flush()
+        results.append(row)
+      d += timedelta(days=1)
+
+    db.commit()
+  except Exception:
+    db.rollback()
+    raise
+  for row in results:
+    db.refresh(row)
+  return results
 
 
 def create_attendance_import(

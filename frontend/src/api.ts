@@ -124,7 +124,40 @@ export function listCheckins(
 export function createCheckin(nickname: string, status?: 'leave') {
   return request<CheckIn>('/api/checkins', {
     method: 'POST',
-    body: JSON.stringify({ nickname, ...(status ? { status } : {}) }),
+    body: JSON.stringify({
+      nickname,
+      ...(status ? { status } : {}),
+    }),
+  })
+}
+
+export function createScheduledLeave(
+  nickname: string,
+  leaveStartDateLocal: string,
+  leaveEndDateLocal: string,
+) {
+  return request<CheckIn[]>('/api/checkins/scheduled-leave', {
+    method: 'POST',
+    body: JSON.stringify({
+      nickname,
+      leave_start_date_local: leaveStartDateLocal,
+      leave_end_date_local: leaveEndDateLocal,
+    }),
+  })
+}
+
+export function upsertAttendanceCell(
+  nickname: string,
+  checkinDateLocal: string,
+  status: CheckIn['status'] | null,
+) {
+  return request<CheckIn[]>('/api/checkins/attendance-cell', {
+    method: 'PUT',
+    body: JSON.stringify({
+      nickname,
+      checkin_date_local: checkinDateLocal,
+      status,
+    }),
   })
 }
 

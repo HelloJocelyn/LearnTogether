@@ -4,6 +4,7 @@ import {
   apiBaseUrl,
   createCheckin,
   createMember,
+  createScheduledLeave,
   getCheckinWindowConfig,
   getDailyHero,
   listCheckins,
@@ -14,7 +15,13 @@ import {
   type Member,
 } from '../api'
 import ZoomManualJoin from '../components/ZoomManualJoin'
-import { classifySession, formatClockInTz } from '../checkinWindow'
+import {
+  calendarDatePlusDays,
+  calendarDateTodayInTz,
+  checkinLocalDateKey,
+  classifySession,
+  formatClockInTz,
+} from '../checkinWindow'
 import { useI18n } from '../i18n'
 import { avatarFor } from '../avatar'
 
@@ -73,6 +80,8 @@ export default function Home() {
   const [tick, setTick] = useState(0)
   const [dailyHero, setDailyHero] = useState<DailyHero | null>(null)
   const [heroImgFailed, setHeroImgFailed] = useState(false)
+  const [leaveStartDate, setLeaveStartDate] = useState('')
+  const [leaveEndDate, setLeaveEndDate] = useState('')
   const memberFormatHint = 'nickname role goal'
   const selectedName =
     typeof selectedMemberId === 'number'
@@ -120,6 +129,21 @@ export default function Home() {
     () => (clockCfg ? classifySession(new Date(), displayTz, clockCfg) : 'outside'),
     [tick, clockCfg, displayTz]
   )
+
+  const leaveDateMin = useMemo(
+    () => calendarDatePlusDays(calendarDateTodayInTz(new Date(), displayTz), 1),
+    [tick, displayTz],
+  )
+  const leaveDateMax = useMemo(
+    () => calendarDatePlusDays(calendarDateTodayInTz(new Date(), displayTz), 366),
+    [tick, displayTz],
+  )
+
+  const leaveEndMin = useMemo(() => {
+    const s = leaveStartDate.trim()
+    if (s !== '') return s
+    return leaveDateMin
+  }, [leaveStartDate, leaveDateMin])
 
   useEffect(() => {
     setHeroImgFailed(false)
@@ -215,9 +239,50 @@ export default function Home() {
     }
   }
 
+  async function onScheduleLeave() {
+    const fallback = nickname.trim()
+    const name = selectedName || fallback
+    const start = leaveStartDate.trim()
+    const end = leaveEndDate.trim()
+    if (!name || !start || !end) return
+    if (start > end) {
+      setJoinError(t('home.scheduleLeaveRangeError'))
+      return
+    }
+    if (!selectedName) {
+      const parts = fallback.split(/\s+/).filter(Boolean)
+      if (parts.length !== 3) {
+        setJoinError(t('home.nameFormatError', { format: memberFormatHint }))
+        return
+      }
+    }
+    setJoinError(null)
+    setOutsideWindow(false)
+    setSessionFlash(null)
+    setJoining(true)
+    try {
+      const rows = await createScheduledLeave(name, start, end)
+      await refresh()
+      setLastCheckinStatus('leave')
+      setSessionFlash(t('home.futureLeaveSubmittedMsg', { start, end, count: rows.length }))
+      setLeaveStartDate('')
+      setLeaveEndDate('')
+      setJoining(false)
+    } catch (err: unknown) {
+      setJoinError(err instanceof Error ? err.message : String(err))
+      setJoining(false)
+    }
+  }
+
   const todaysJoins = useMemo(() => {
-    return [...checkins].sort((a, b) => (a.id === b.id ? 0 : a.id > b.id ? -1 : 1))
-  }, [checkins])
+    const todayKey = calendarDateTodayInTz(new Date(), displayTz)
+    return [...checkins]
+      .filter(
+        (c) =>
+          c.status !== 'leave' && checkinLocalDateKey(c, displayTz) === todayKey,
+      )
+      .sort((a, b) => (a.id === b.id ? 0 : a.id > b.id ? -1 : 1))
+  }, [checkins, displayTz, tick])
   const encourageLines = useMemo(() => splitEncourageLines(dailyHero), [dailyHero])
 
   return (
@@ -275,6 +340,46 @@ export default function Home() {
                 </button>
                 <button type="button" className="secondary" disabled={!canJoin || joining} onClick={onApplyLeave}>
                   {t('home.applyLeave')}
+                </button>
+              </div>
+              <div className="muted scheduleLeaveHint">{t('home.scheduleLeaveHint')}</div>
+              <div className="scheduleLeavePeriodGrid">
+                <label className="scheduleLeaveLabel">
+                  <span>{t('home.scheduleLeaveStartLabel')}</span>
+                  <input
+                    type="date"
+                    value={leaveStartDate}
+                    min={leaveDateMin}
+                    max={leaveDateMax}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setLeaveStartDate(v)
+                      setLeaveEndDate((prev) => (prev !== '' && prev < v ? v : prev))
+                    }}
+                  />
+                </label>
+                <label className="scheduleLeaveLabel">
+                  <span>{t('home.scheduleLeaveEndLabel')}</span>
+                  <input
+                    type="date"
+                    value={leaveEndDate}
+                    min={leaveEndMin}
+                    max={leaveDateMax}
+                    onChange={(e) => setLeaveEndDate(e.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="secondary scheduleLeaveSubmitBtn"
+                  disabled={
+                    !canJoin ||
+                    joining ||
+                    leaveStartDate.trim().length === 0 ||
+                    leaveEndDate.trim().length === 0
+                  }
+                  onClick={onScheduleLeave}
+                >
+                  {joining ? t('home.joining') : t('home.scheduleLeaveSubmit')}
                 </button>
               </div>
             </form>

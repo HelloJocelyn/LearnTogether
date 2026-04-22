@@ -51,3 +51,41 @@ export function formatClockInTz(date: Date, timeZone: string): string {
     hour12: false,
   }).format(date)
 }
+
+/** Today's calendar date YYYY-MM-DD in `timeZone` (for the given instant). */
+export function calendarDateTodayInTz(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+/** Local calendar date (YYYY-MM-DD) for a check-in row (stored local date or created_at in tz). */
+export function checkinLocalDateKey(
+  c: { checkin_date_local?: string | null; created_at: string },
+  timeZone: string,
+): string {
+  const raw = c.checkin_date_local?.trim()
+  if (raw) {
+    const m = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/)
+    if (m) {
+      const y = Number(m[1])
+      const mo = Number(m[2])
+      const d = Number(m[3])
+      return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+  }
+  return calendarDateTodayInTz(new Date(c.created_at), timeZone)
+}
+
+/** Proleptic Gregorian calendar: add `deltaDays` to an ISO date (YYYY-MM-DD). */
+export function calendarDatePlusDays(isoYmd: string, deltaDays: number): string {
+  const [y, m, d] = isoYmd.split('-').map(Number)
+  const next = new Date(Date.UTC(y, m - 1, d + deltaDays))
+  const yy = next.getUTCFullYear()
+  const mm = next.getUTCMonth() + 1
+  const dd = next.getUTCDate()
+  return `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+}

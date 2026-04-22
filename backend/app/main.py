@@ -204,22 +204,53 @@ def list_checkins(
 def create_checkin(payload: schemas.CheckInCreate, db: Session = Depends(get_db)):
   nickname = payload.nickname.strip()
   if not nickname:
-    # Keep it simple without auth; validate non-empty nickname.
-    from fastapi import HTTPException
-
     raise HTTPException(status_code=400, detail="nickname is required")
   tz_name = os.getenv("CHECKIN_TZ")
   window = load_checkin_window_config()
-  return crud.create_checkin(
-    db,
-    nickname=nickname,
-    requested_status="leave" if payload.status == "leave" else None,
-    tz_name=tz_name,
-    morning_start=window["morning_start"],
-    morning_end=window["morning_end"],
-    night_start=window["night_start"],
-    night_end=window["night_end"],
-  )
+  try:
+    return crud.create_checkin(
+      db,
+      nickname=nickname,
+      requested_status="leave" if payload.status == "leave" else None,
+      tz_name=tz_name,
+      morning_start=window["morning_start"],
+      morning_end=window["morning_end"],
+      night_start=window["night_start"],
+      night_end=window["night_end"],
+    )
+  except ValueError as exc:
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/checkins/scheduled-leave", response_model=list[schemas.CheckInOut])
+def create_scheduled_leave(payload: schemas.ScheduledLeaveCreate, db: Session = Depends(get_db)):
+  nickname = payload.nickname.strip()
+  if not nickname:
+    raise HTTPException(status_code=400, detail="nickname is required")
+  tz_name = os.getenv("CHECKIN_TZ")
+  try:
+    return crud.create_scheduled_leave_period(
+      db,
+      nickname=nickname,
+      leave_start_date_local=payload.leave_start_date_local.strip(),
+      leave_end_date_local=payload.leave_end_date_local.strip(),
+      tz_name=tz_name,
+    )
+  except ValueError as exc:
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/checkins/attendance-cell", response_model=list[schemas.CheckInOut])
+def put_attendance_cell(payload: schemas.AttendanceCellUpsert, db: Session = Depends(get_db)):
+  try:
+    return crud.upsert_attendance_cell(
+      db,
+      nickname=payload.nickname,
+      checkin_date_local=payload.checkin_date_local,
+      status=payload.status,
+    )
+  except ValueError as exc:
+    raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/members", response_model=list[schemas.MemberOut])

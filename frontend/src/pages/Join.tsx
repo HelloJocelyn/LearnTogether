@@ -2,8 +2,13 @@ import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import ZoomManualJoin from '../components/ZoomManualJoin'
-import { createCheckin, getCheckinWindowConfig, type CheckinWindowConfig } from '../api'
-import { classifySession, formatClockInTz } from '../checkinWindow'
+import { createCheckin, createScheduledLeave, getCheckinWindowConfig, type CheckinWindowConfig } from '../api'
+import {
+  calendarDatePlusDays,
+  calendarDateTodayInTz,
+  classifySession,
+  formatClockInTz,
+} from '../checkinWindow'
 import { useI18n } from '../i18n'
 
 const zoomUrl =
@@ -24,6 +29,8 @@ export default function Join() {
   const [sessionFlash, setSessionFlash] = useState<string | null>(null)
   const [clockCfg, setClockCfg] = useState<CheckinWindowConfig | null>(null)
   const [tick, setTick] = useState(0)
+  const [leaveStartDate, setLeaveStartDate] = useState('')
+  const [leaveEndDate, setLeaveEndDate] = useState('')
 
   const canSubmit = useMemo(() => nickname.trim().length > 0 && !submitting, [
     nickname,
@@ -46,6 +53,21 @@ export default function Join() {
     () => (clockCfg ? classifySession(new Date(), displayTz, clockCfg) : 'outside'),
     [tick, clockCfg, displayTz]
   )
+
+  const leaveDateMin = useMemo(
+    () => calendarDatePlusDays(calendarDateTodayInTz(new Date(), displayTz), 1),
+    [tick, displayTz],
+  )
+  const leaveDateMax = useMemo(
+    () => calendarDatePlusDays(calendarDateTodayInTz(new Date(), displayTz), 366),
+    [tick, displayTz],
+  )
+
+  const leaveEndMin = useMemo(() => {
+    const s = leaveStartDate.trim()
+    if (s !== '') return s
+    return leaveDateMin
+  }, [leaveStartDate, leaveDateMin])
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -84,6 +106,31 @@ export default function Join() {
       const result = await createCheckin(nickname.trim(), 'leave')
       setLastCheckinStatus(result.status)
       setOutsideWindow(true)
+      setSubmitting(false)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+      setSubmitting(false)
+    }
+  }
+
+  async function onScheduleLeave() {
+    const start = leaveStartDate.trim()
+    const end = leaveEndDate.trim()
+    if (!nickname.trim() || !start || !end) return
+    if (start > end) {
+      setError(t('join.scheduleLeaveRangeError'))
+      return
+    }
+    setError(null)
+    setOutsideWindow(false)
+    setSessionFlash(null)
+    setSubmitting(true)
+    try {
+      const rows = await createScheduledLeave(nickname.trim(), start, end)
+      setLastCheckinStatus('leave')
+      setSessionFlash(t('join.futureLeaveSubmittedMsg', { start, end, count: rows.length }))
+      setLeaveStartDate('')
+      setLeaveEndDate('')
       setSubmitting(false)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
@@ -138,6 +185,45 @@ export default function Join() {
               {t('join.applyLeave')}
             </button>
           </form>
+          <div className="muted scheduleLeaveHint">{t('join.scheduleLeaveHint')}</div>
+          <div className="scheduleLeavePeriodGrid">
+            <label className="scheduleLeaveLabel">
+              <span>{t('join.scheduleLeaveStartLabel')}</span>
+              <input
+                type="date"
+                value={leaveStartDate}
+                min={leaveDateMin}
+                max={leaveDateMax}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setLeaveStartDate(v)
+                  setLeaveEndDate((prev) => (prev !== '' && prev < v ? v : prev))
+                }}
+              />
+            </label>
+            <label className="scheduleLeaveLabel">
+              <span>{t('join.scheduleLeaveEndLabel')}</span>
+              <input
+                type="date"
+                value={leaveEndDate}
+                min={leaveEndMin}
+                max={leaveDateMax}
+                onChange={(e) => setLeaveEndDate(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="secondary scheduleLeaveSubmitBtn"
+              disabled={
+                !canSubmit ||
+                leaveStartDate.trim().length === 0 ||
+                leaveEndDate.trim().length === 0
+              }
+              onClick={onScheduleLeave}
+            >
+              {submitting ? t('join.joining') : t('join.scheduleLeaveSubmit')}
+            </button>
+          </div>
           <ZoomManualJoin />
           {error ? <p className="error">{error}</p> : null}
           {outsideWindow ? (

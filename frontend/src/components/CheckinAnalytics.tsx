@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   getStatisticsSettings,
   listBadges,
   listCheckins,
+  upsertAttendanceCell,
   type AchievementBadge,
   type CheckIn,
 } from '../api'
@@ -17,6 +18,16 @@ type CheckinStatus = CheckIn['status']
 
 const tzDefault = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
 const statusOrder: CheckinStatus[] = ['morning', 'night', 'late', 'leave', 'outside']
+
+/** Status options when editing a statistics matrix cell (backend values). */
+const editableMatrixStatuses: CheckinStatus[] = [
+  'morning',
+  'night',
+  'normal',
+  'late',
+  'leave',
+  'outside',
+]
 
 function defaultWeeklyNoCheckinThreshold(): number {
   const raw = import.meta.env.VITE_STATS_WEEKLY_NO_CHECKIN_THRESHOLD as string | undefined
@@ -179,6 +190,35 @@ export default function CheckinAnalytics() {
   })
   const [noCheckinAlertThreshold, setNoCheckinAlertThreshold] = useState(defaultWeeklyNoCheckinThreshold)
 
+  const [cellEditor, setCellEditor] = useState<{
+    nickname: string
+    dateKey: string
+    anchorX: number
+    anchorY: number
+    tab: Tab
+  } | null>(null)
+  const [savingCell, setSavingCell] = useState(false)
+  const cellPopoverRef = useRef<HTMLDivElement | null>(null)
+
+  const reloadCheckins = useCallback(async () => {
+    const endExclusive = new Date()
+    endExclusive.setDate(endExclusive.getDate() + 1)
+    const endExclusiveParts = getTzYMDParts(endExclusive, tz)
+    const endKey = dateKey(endExclusiveParts.y, endExclusiveParts.m, endExclusiveParts.day)
+
+    const start = new Date()
+    start.setDate(start.getDate() - 370)
+    const startParts = getTzYMDParts(start, tz)
+    const startKey = dateKey(startParts.y, startParts.m, startParts.day)
+
+    const [ci, bd] = await Promise.all([
+      listCheckins(5000, false, { startDate: startKey, endDate: endKey }),
+      listBadges({ startDate: startKey, endDate: endKey, limit: 5000 }),
+    ])
+    setCheckins(ci)
+    setBadges(bd)
+  }, [tz])
+
   useEffect(() => {
     function loadThreshold() {
       getStatisticsSettings()
@@ -191,31 +231,67 @@ export default function CheckinAnalytics() {
   }, [])
 
   useEffect(() => {
-    // Backend treats end_date as an exclusive upper bound (start of that local day).
-    // So we pass "tomorrow" to include today's check-ins.
-    const endExclusive = new Date(now)
-    endExclusive.setDate(endExclusive.getDate() + 1)
-    const endExclusiveParts = getTzYMDParts(endExclusive, tz)
-    const endKey = dateKey(endExclusiveParts.y, endExclusiveParts.m, endExclusiveParts.day)
-
-    const start = new Date(now)
-    start.setDate(start.getDate() - 370)
-    const startParts = getTzYMDParts(start, tz)
-    const startKey = dateKey(startParts.y, startParts.m, startParts.day)
-
     setLoading(true)
     setError(null)
-    Promise.all([
-      listCheckins(5000, false, { startDate: startKey, endDate: endKey }),
-      listBadges({ startDate: startKey, endDate: endKey, limit: 5000 }),
-    ])
-      .then(([ci, bd]) => {
-        setCheckins(ci)
-        setBadges(bd)
-      })
+    reloadCheckins()
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
       .finally(() => setLoading(false))
-  }, [now, todayParts.day, todayParts.m, todayParts.y, tz])
+  }, [now, todayParts.day, todayParts.m, todayParts.y, tz, reloadCheckins])
+
+  useEffect(() => {
+    if (!cellEditor) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setCellEditor(null)
+    }
+    function onPointerDown(e: PointerEvent) {
+      const el = cellPopoverRef.current
+      if (el && e.target instanceof Node && el.contains(e.target)) return
+      setCellEditor(null)
+    }
+    function onScroll() {
+      setCellEditor(null)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [cellEditor])
+
+  useEffect(() => {
+    setCellEditor(null)
+  }, [tab])
+
+  async function applyMatrixCellStatus(status: CheckinStatus | null) {
+    if (!cellEditor) return
+    setSavingCell(true)
+    setError(null)
+    try {
+      await upsertAttendanceCell(cellEditor.nickname, cellEditor.dateKey, status)
+      await reloadCheckins()
+      setCellEditor(null)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSavingCell(false)
+    }
+  }
+
+  function openMatrixCellEditor(tab: Tab, nickname: string, dateKey: string) {
+    return (e: MouseEvent<HTMLButtonElement>) => {
+      const r = e.currentTarget.getBoundingClientRect()
+      setCellEditor({
+        nickname,
+        dateKey,
+        anchorX: r.left + r.width / 2,
+        anchorY: r.bottom + 6,
+        tab,
+      })
+    }
+  }
 
   const yearlyData = useMemo(() => {
     const map = new Map<string, { joined: number; counts: Record<CheckinStatus, number> }>()
@@ -266,6 +342,7 @@ export default function CheckinAnalytics() {
 
     // statusByUserDay[nickname][dateKey] => most relevant status for that day
     const statusByUserDay = new Map<string, Map<string, CheckinStatus>>()
+    const checkinsByUserDay = new Map<string, Map<string, CheckIn[]>>()
     for (const c of checkins) {
       const p = getCheckinYMD(c, tz)
       if (p.y !== selectedYear || p.m !== selectedMonth) continue
@@ -274,6 +351,11 @@ export default function CheckinAnalytics() {
       const userMap = statusByUserDay.get(c.nickname) ?? new Map()
       userMap.set(dKey, pickDominantStatus(userMap.get(dKey), normalizeStatusForStats(c.status)))
       statusByUserDay.set(c.nickname, userMap)
+      const cinMap = checkinsByUserDay.get(c.nickname) ?? new Map()
+      const lst = cinMap.get(dKey) ?? []
+      lst.push(c)
+      cinMap.set(dKey, lst)
+      checkinsByUserDay.set(c.nickname, cinMap)
     }
 
     const badgesByUserDay = new Map<string, Map<string, AchievementBadge[]>>()
@@ -290,7 +372,7 @@ export default function CheckinAnalytics() {
     }
 
     const users = Array.from(usersSet).sort()
-    return { users, days, statusByUserDay, badgesByUserDay }
+    return { users, days, statusByUserDay, badgesByUserDay, checkinsByUserDay }
   }, [badges, checkins, selectedMonth, selectedYear, tz])
 
   const monthlyMemberSummary = useMemo(() => {
@@ -344,6 +426,7 @@ export default function CheckinAnalytics() {
     const keySet = new Set(dayKeys)
     const usersSet = new Set<string>()
     const statusByUserDay = new Map<string, Map<string, CheckinStatus>>()
+    const checkinsByUserDay = new Map<string, Map<string, CheckIn[]>>()
     for (const c of checkins) {
       const p = getCheckinYMD(c, tz)
       const dKey = dateKey(p.y, p.m, p.day)
@@ -352,6 +435,11 @@ export default function CheckinAnalytics() {
       const userMap = statusByUserDay.get(c.nickname) ?? new Map()
       userMap.set(dKey, pickDominantStatus(userMap.get(dKey), normalizeStatusForStats(c.status)))
       statusByUserDay.set(c.nickname, userMap)
+      const cinMap = checkinsByUserDay.get(c.nickname) ?? new Map()
+      const lst = cinMap.get(dKey) ?? []
+      lst.push(c)
+      cinMap.set(dKey, lst)
+      checkinsByUserDay.set(c.nickname, cinMap)
     }
     const badgesByUserDay = new Map<string, Map<string, AchievementBadge[]>>()
     for (const b of badges) {
@@ -367,7 +455,7 @@ export default function CheckinAnalytics() {
       badgesByUserDay.set(b.nickname, userMap)
     }
     const users = Array.from(usersSet).sort()
-    return { users, dayKeys, statusByUserDay, badgesByUserDay }
+    return { users, dayKeys, statusByUserDay, badgesByUserDay, checkinsByUserDay }
   }, [badges, checkins, weekMonday, tz])
 
   const weeklyMemberSummary = useMemo(() => {
@@ -627,9 +715,16 @@ export default function CheckinAnalytics() {
                           : ''
                       if (!st && badgeList.length === 0) {
                         return (
-                          <div key={dk} className="cell empty" aria-label={t('stats.noCheckin')}>
+                          <button
+                            key={dk}
+                            type="button"
+                            className="cell cellInteractive empty"
+                            aria-label={t('stats.noCheckin')}
+                            title={t('stats.cellEditHint')}
+                            onClick={openMatrixCellEditor('weekly', u, dk)}
+                          >
                             <span className="cellInner" />
-                          </div>
+                          </button>
                         )
                       }
                       const titleParts = [st ? t(`stats.status.${st}`) : '', badgeTitle].filter(Boolean)
@@ -637,11 +732,13 @@ export default function CheckinAnalytics() {
                       const cellKind = st ?? (badgeOnly ? 'badgeOnly' : 'empty')
                       const showMedalInside = badgeOnly
                       return (
-                        <div
+                        <button
                           key={dk}
-                          className={`cell ${cellKind} ${badgeList.length > 0 ? 'hasBadge' : ''}`}
-                          title={titleParts.join(' · ')}
+                          type="button"
+                          className={`cell cellInteractive ${cellKind} ${badgeList.length > 0 ? 'hasBadge' : ''}`}
+                          title={[titleParts.join(' · '), t('stats.cellEditHint')].filter(Boolean).join(' · ')}
                           aria-label={titleParts.join(' · ')}
+                          onClick={openMatrixCellEditor('weekly', u, dk)}
                         >
                           <span className="cellInner">
                             {showMedalInside
@@ -650,7 +747,7 @@ export default function CheckinAnalytics() {
                                 : '🏅'
                               : ''}
                           </span>
-                        </div>
+                        </button>
                       )
                     })}
                   </div>
@@ -776,9 +873,16 @@ export default function CheckinAnalytics() {
                           : ''
                       if (!st && badgeList.length === 0) {
                         return (
-                          <div key={d} className="cell empty" aria-label={t('stats.noCheckin')}>
+                          <button
+                            key={d}
+                            type="button"
+                            className="cell cellInteractive empty"
+                            aria-label={t('stats.noCheckin')}
+                            title={t('stats.cellEditHint')}
+                            onClick={openMatrixCellEditor('monthly', u, dk)}
+                          >
                             <span className="cellInner" />
-                          </div>
+                          </button>
                         )
                       }
                       const titleParts = [st ? t(`stats.status.${st}`) : '', badgeTitle].filter(Boolean)
@@ -786,11 +890,13 @@ export default function CheckinAnalytics() {
                       const cellKind = st ?? (badgeOnly ? 'badgeOnly' : 'empty')
                       const showMedalInside = badgeOnly
                       return (
-                        <div
+                        <button
                           key={d}
-                          className={`cell ${cellKind} ${badgeList.length > 0 ? 'hasBadge' : ''}`}
-                          title={titleParts.join(' · ')}
+                          type="button"
+                          className={`cell cellInteractive ${cellKind} ${badgeList.length > 0 ? 'hasBadge' : ''}`}
+                          title={[titleParts.join(' · '), t('stats.cellEditHint')].filter(Boolean).join(' · ')}
                           aria-label={titleParts.join(' · ')}
+                          onClick={openMatrixCellEditor('monthly', u, dk)}
                         >
                           <span className="cellInner">
                             {showMedalInside
@@ -799,7 +905,7 @@ export default function CheckinAnalytics() {
                                 : '🏅'
                               : ''}
                           </span>
-                        </div>
+                        </button>
                       )
                     })}
                   </div>
@@ -829,6 +935,53 @@ export default function CheckinAnalytics() {
               ) : null}
             </div>
           ))}
+        </div>
+      ) : null}
+
+      {cellEditor ? (
+        <div
+          ref={cellPopoverRef}
+          className="statsCellPopover"
+          role="dialog"
+          aria-modal="false"
+          aria-label={t('stats.cellPickerTitle')}
+          style={{
+            left: cellEditor.anchorX,
+            top: cellEditor.anchorY,
+          }}
+        >
+          <div className="statsCellPopoverTitle muted">
+            {cellEditor.nickname}
+            <br />
+            <span>{cellEditor.dateKey}</span>
+          </div>
+          <div className="statsCellPopoverActions">
+            {editableMatrixStatuses.map((st) => (
+              <button
+                key={st}
+                type="button"
+                className={`statsCellPopoverBtn statsCellPopoverBtn-${st}`}
+                disabled={savingCell}
+                onClick={() => applyMatrixCellStatus(st)}
+              >
+                {t(`stats.status.${st}`)}
+              </button>
+            ))}
+          </div>
+          {(((cellEditor.tab === 'weekly'
+            ? weeklyMatrix.checkinsByUserDay.get(cellEditor.nickname)?.get(cellEditor.dateKey)
+            : monthlyMatrix.checkinsByUserDay.get(cellEditor.nickname)?.get(cellEditor.dateKey)) ?? [])
+            .length > 0) ? (
+            <button
+              type="button"
+              className="secondary statsCellPopoverClear"
+              disabled={savingCell}
+              onClick={() => applyMatrixCellStatus(null)}
+            >
+              {t('stats.cellClearAttendance')}
+            </button>
+          ) : null}
+          {savingCell ? <div className="muted statsCellPopoverSaving">{t('stats.cellSaving')}</div> : null}
         </div>
       ) : null}
     </section>

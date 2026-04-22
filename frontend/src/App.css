@@ -716,6 +716,42 @@ button.secondary {
   gap: 8px;
 }
 
+.scheduleLeaveHint {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.scheduleLeavePeriodGrid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  margin-top: 8px;
+}
+
+.scheduleLeaveSubmitBtn {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .scheduleLeavePeriodGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.scheduleLeaveLabel {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.scheduleLeaveLabel input[type='date'] {
+  width: 100%;
+  max-width: 100%;
+}
+
 .zoomManualDetails {
   margin-top: 10px;
   border-top: 1px solid rgba(148, 163, 184, 0.28);
@@ -1275,6 +1311,103 @@ button.secondary {
   place-items: center;
   border: 1px solid rgba(148, 163, 184, 0.25);
   background: rgba(255, 255, 255, 0.02);
+}
+
+button.cell {
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  box-sizing: border-box;
+  appearance: none;
+  cursor: pointer;
+}
+
+button.cell:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.35);
+}
+
+button.cell:focus-visible {
+  outline: 2px solid rgba(56, 189, 248, 0.65);
+  outline-offset: 2px;
+}
+
+.statsCellPopover {
+  position: fixed;
+  z-index: 450;
+  transform: translateX(-50%);
+  min-width: 200px;
+  max-width: min(92vw, 280px);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  box-shadow: var(--shadow);
+}
+
+.statsCellPopoverTitle {
+  font-size: 12px;
+  line-height: 1.35;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+
+.statsCellPopoverActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.statsCellPopoverBtn {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  cursor: pointer;
+  color: inherit;
+  text-align: center;
+}
+
+.statsCellPopoverBtn:hover:not(:disabled) {
+  border-color: var(--accent-border);
+}
+
+.statsCellPopoverBtn-morning {
+  border-left: 3px solid rgba(20, 184, 166, 0.95);
+}
+
+.statsCellPopoverBtn-night {
+  border-left: 3px solid rgba(99, 102, 241, 0.95);
+}
+
+.statsCellPopoverBtn-normal {
+  border-left: 3px solid rgba(34, 197, 94, 0.95);
+}
+
+.statsCellPopoverBtn-late {
+  border-left: 3px solid rgba(245, 158, 11, 0.95);
+}
+
+.statsCellPopoverBtn-leave {
+  border-left: 3px solid rgba(99, 102, 241, 0.85);
+}
+
+.statsCellPopoverBtn-outside {
+  border-left: 3px solid rgba(148, 163, 184, 0.85);
+}
+
+.statsCellPopoverClear {
+  margin-top: 8px;
+  width: 100%;
+  font-size: 12px;
+}
+
+.statsCellPopoverSaving {
+  margin-top: 6px;
+  font-size: 12px;
 }
 
 .cellInner {

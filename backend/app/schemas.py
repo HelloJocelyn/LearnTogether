@@ -23,6 +23,12 @@ class CheckInCreate(BaseModel):
   status: Optional[Literal["leave"]] = None
 
 
+class ScheduledLeaveCreate(BaseModel):
+  nickname: str
+  leave_start_date_local: str = Field(min_length=10, max_length=10)
+  leave_end_date_local: str = Field(min_length=10, max_length=10)
+
+
 class CheckInOut(BaseModel):
   model_config = ConfigDict(from_attributes=True)
 
@@ -32,6 +38,13 @@ class CheckInOut(BaseModel):
   is_real: bool
   status: CheckinSessionStatus
   checkin_date_local: Optional[str] = None
+
+
+class AttendanceCellUpsert(BaseModel):
+  nickname: str = Field(min_length=1, max_length=80)
+  checkin_date_local: str = Field(min_length=10, max_length=10)
+  """When null, delete all check-ins for this nickname and local calendar date."""
+  status: Optional[CheckinSessionStatus] = None
 
 
 AttendanceStatus = Literal["attended", "not_attended", "unknown"]
