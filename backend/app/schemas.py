@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -45,6 +45,17 @@ class AttendanceCellUpsert(BaseModel):
   checkin_date_local: str = Field(min_length=10, max_length=10)
   """When null, delete all check-ins for this nickname and local calendar date."""
   status: Optional[CheckinSessionStatus] = None
+
+
+class MeetingJoinIn(BaseModel):
+  client_id: str = Field(min_length=1, max_length=120)
+  display_name: Optional[str] = Field(default=None, max_length=120)
+
+
+class MeetingJoinOut(BaseModel):
+  room_id: str
+  is_host: bool
+  ice_servers: list[Any]
 
 
 AttendanceStatus = Literal["attended", "not_attended", "unknown"]

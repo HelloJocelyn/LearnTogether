@@ -2097,3 +2097,67 @@ button.badgeCircle {
   align-items: center;
 }
 
+.meetingMain {
+  position: relative;
+  z-index: 1;
+}
+
+.meetingHostBanner {
+  margin: 0 0 12px;
+  max-width: 52rem;
+}
+
+.meetingVideoLayout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 16px 0;
+  align-items: flex-start;
+}
+
+.meetingLocalWrap {
+  flex: 0 0 auto;
+  width: min(100%, 320px);
+}
+
+.meetingLocalVideo,
+.meetingRemoteVideo {
+  width: 100%;
+  max-height: 240px;
+  border-radius: 12px;
+  background: #111;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.meetingLabel {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.meetingRemoteGrid {
+  flex: 1 1 280px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-height: 120px;
+}
+
+.meetingHint {
+  max-width: 52rem;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.meetingLogPre {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.35;
+  max-height: 200px;
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.5);
+}
+

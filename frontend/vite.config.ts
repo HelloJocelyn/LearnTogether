@@ -12,9 +12,10 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: ['favicon.svg', 'pwa-192.png', 'pwa-512.png'],
-        // Service worker + manifest in dev (localhost); required to test install in Chrome.
+        // Keep SW off in dev so localhost does not keep serving stale bundles after code changes.
+        // Use `vite preview` after a build to test PWA install / offline.
         devOptions: {
-          enabled: true,
+          enabled: false,
         },
         manifest: {
           name: 'LearnTogether',
@@ -49,6 +50,8 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          skipWaiting: true,
+          clientsClaim: true,
         },
       }),
     ],
@@ -59,6 +62,7 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: 'http://localhost:8000',
           changeOrigin: true,
+          ws: true,
         },
       },
     },

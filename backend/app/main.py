@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from . import crud, schemas
+from . import crud, meeting_live, schemas
 from .schemas import attach_learning_goal_pace, derive_learning_goal_progress
 from .badge_storage import path_for_stored_filename, save_certificate_image
 from .checkin_config import (
@@ -35,6 +35,7 @@ from .models import AchievementBadge
 
 
 app = FastAPI(title="LearnTogether API")
+app.include_router(meeting_live.router)
 logger = logging.getLogger("uvicorn.error")
 
 

@@ -1,8 +1,14 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import ZoomManualJoin from '../components/ZoomManualJoin'
-import { createCheckin, createScheduledLeave, getCheckinWindowConfig, type CheckinWindowConfig } from '../api'
+import {
+  createCheckin,
+  createScheduledLeave,
+  getCheckinWindowConfig,
+  joinMeeting,
+  type CheckinWindowConfig,
+} from '../api'
 import {
   calendarDatePlusDays,
   calendarDateTodayInTz,
@@ -11,14 +17,11 @@ import {
 } from '../checkinWindow'
 import { useI18n } from '../i18n'
 
-const zoomUrl =
-  (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
-  'https://zoom.us/join'
-
 const displayTz = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
 
 export default function Join() {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const [nickname, setNickname] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -80,11 +83,20 @@ export default function Join() {
       setLastCheckinStatus(result.status)
       if (result.is_real) {
         setSessionFlash(
-          t('home.checkinRecordedSession', { type: t(`home.status.${result.status}`) })
+          t('home.checkinRecordedSessionWebrtc', { type: t(`home.status.${result.status}`) }),
         )
-        window.setTimeout(() => {
-          window.location.assign(zoomUrl)
-        }, 1400)
+        const clientId = crypto.randomUUID()
+        const join = await joinMeeting(clientId, nickname.trim())
+        setSubmitting(false)
+        navigate('/meeting', {
+          state: {
+            clientId,
+            room_id: join.room_id,
+            is_host: join.is_host,
+            ice_servers: join.ice_servers,
+            displayName: nickname.trim(),
+          },
+        })
         return
       }
 
@@ -107,6 +119,34 @@ export default function Join() {
       setLastCheckinStatus(result.status)
       setOutsideWindow(true)
       setSubmitting(false)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : String(err))
+      setSubmitting(false)
+    }
+  }
+
+  async function onContinueToMeetingFromOutside() {
+    const name = nickname.trim()
+    if (!name) {
+      setError(t('join.needNicknameForMeeting'))
+      return
+    }
+    setError(null)
+    setSubmitting(true)
+    try {
+      const clientId = crypto.randomUUID()
+      const join = await joinMeeting(clientId, name)
+      setOutsideWindow(false)
+      setSubmitting(false)
+      navigate('/meeting', {
+        state: {
+          clientId,
+          room_id: join.room_id,
+          is_host: join.is_host,
+          ice_servers: join.ice_servers,
+          displayName: name,
+        },
+      })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
       setSubmitting(false)
@@ -179,7 +219,7 @@ export default function Join() {
               autoFocus
             />
             <button type="submit" disabled={!canSubmit}>
-              {submitting ? t('join.joining') : t('join.joinZoom')}
+              {submitting ? t('join.joining') : t('join.joinMeetingWebRtc')}
             </button>
             <button type="button" className="secondary" disabled={!canSubmit} onClick={onApplyLeave}>
               {t('join.applyLeave')}
@@ -233,8 +273,8 @@ export default function Join() {
                 {lastCheckinStatus === 'leave' ? t('join.leaveSubmittedMsg') : t('join.outsideWindowMsg')}
               </div>
               <div className="row" style={{ marginTop: 12 }}>
-                <button type="button" onClick={() => window.location.assign(zoomUrl)}>
-                  {t('join.continueZoom')}
+                <button type="button" disabled={submitting} onClick={() => void onContinueToMeetingFromOutside()}>
+                  {submitting ? t('join.joining') : t('join.continueToMeeting')}
                 </button>
                 <button
                   type="button"
@@ -247,7 +287,7 @@ export default function Join() {
             </div>
           ) : null}
           <p className="muted" style={{ marginTop: 10 }}>
-            {t('join.redirectHint')}
+            {t('join.redirectHintWebrtc')}
           </p>
         </section>
       </main>

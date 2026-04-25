@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
 import {
   apiBaseUrl,
@@ -7,6 +8,7 @@ import {
   createScheduledLeave,
   getCheckinWindowConfig,
   getDailyHero,
+  joinMeeting,
   listCheckins,
   listMembers,
   type CheckIn,
@@ -24,10 +26,6 @@ import {
 } from '../checkinWindow'
 import { useI18n } from '../i18n'
 import { avatarFor } from '../avatar'
-
-const zoomUrl =
-  (import.meta.env.VITE_ZOOM_MEETING_URL as string | undefined) ??
-  'https://zoom.us/join'
 
 const displayTz = (import.meta.env.VITE_CHECKIN_TZ as string | undefined) ?? 'Asia/Tokyo'
 
@@ -66,6 +64,7 @@ function splitEncourageLines(hero: DailyHero | null): string[] {
 
 export default function Home() {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const [checkins, setCheckins] = useState<CheckIn[]>([])
   const [error, setError] = useState<string | null>(null)
   const [nickname, setNickname] = useState('')
@@ -154,6 +153,34 @@ export default function Home() {
     setCheckins(data)
   }
 
+  async function onContinueToMeetingFromOutside() {
+    const name = (selectedName || nickname.trim()).trim()
+    if (!name) {
+      setJoinError(t('home.enterName'))
+      return
+    }
+    setJoinError(null)
+    setJoining(true)
+    try {
+      const clientId = crypto.randomUUID()
+      const join = await joinMeeting(clientId, name)
+      setOutsideWindow(false)
+      setJoining(false)
+      navigate('/meeting', {
+        state: {
+          clientId,
+          room_id: join.room_id,
+          is_host: join.is_host,
+          ice_servers: join.ice_servers,
+          displayName: name,
+        },
+      })
+    } catch (err: unknown) {
+      setJoinError(err instanceof Error ? err.message : String(err))
+      setJoining(false)
+    }
+  }
+
   async function onQuickJoin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fallback = nickname.trim()
@@ -203,11 +230,20 @@ export default function Home() {
 
       if (result.is_real) {
         setSessionFlash(
-          t('home.checkinRecordedSession', { type: t(`home.status.${result.status}`) })
+          t('home.checkinRecordedSessionWebrtc', { type: t(`home.status.${result.status}`) }),
         )
-        window.setTimeout(() => {
-          window.location.assign(zoomUrl)
-        }, 1400)
+        const clientId = crypto.randomUUID()
+        const join = await joinMeeting(clientId, name)
+        setJoining(false)
+        navigate('/meeting', {
+          state: {
+            clientId,
+            room_id: join.room_id,
+            is_host: join.is_host,
+            ice_servers: join.ice_servers,
+            displayName: name,
+          },
+        })
         return
       }
 
@@ -336,7 +372,7 @@ export default function Home() {
               </div>
               <div className="checkinActionsRow">
                 <button type="submit" disabled={!canJoin} className="checkinCta">
-                  {joining ? t('home.joining') : t('home.joinZoom')}
+                  {joining ? t('home.joining') : t('home.joinMeetingWebRtc')}
                 </button>
                 <button type="button" className="secondary" disabled={!canJoin || joining} onClick={onApplyLeave}>
                   {t('home.applyLeave')}
@@ -397,8 +433,8 @@ export default function Home() {
                     : t('home.outsideWindowMsg')}
                 </div>
                 <div className="row" style={{ marginTop: 12 }}>
-                  <button type="button" onClick={() => window.location.assign(zoomUrl)}>
-                    {t('home.continueZoom')}
+                  <button type="button" disabled={joining} onClick={() => void onContinueToMeetingFromOutside()}>
+                    {joining ? t('home.joining') : t('home.continueToMeeting')}
                   </button>
                   <button
                     type="button"

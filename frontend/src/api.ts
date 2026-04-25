@@ -146,6 +146,37 @@ export function createScheduledLeave(
   })
 }
 
+export type MeetingJoinResponse = {
+  room_id: string
+  is_host: boolean
+  ice_servers: RTCIceServer[]
+}
+
+export function joinMeeting(clientId: string, displayName?: string) {
+  return request<MeetingJoinResponse>('/api/meetings/join', {
+    method: 'POST',
+    body: JSON.stringify({
+      client_id: clientId,
+      display_name: displayName?.trim() || undefined,
+    }),
+  })
+}
+
+/** WebSocket URL for mesh signaling (same host as API; path /api/meetings/ws/...). */
+export function meetingWebSocketUrl(roomId: string, clientId: string): string {
+  const raw = rawBase.replace(/\/+$/, '')
+  const origin =
+    typeof window !== 'undefined' && !raw
+      ? window.location.origin
+      : raw
+        ? new URL(raw).origin
+        : window.location.origin
+  const wsProto = origin.startsWith('https') ? 'wss' : 'ws'
+  const httpProtoStripped = origin.replace(/^https?:\/\//, '')
+  const path = `/api/meetings/ws/${encodeURIComponent(roomId)}?client_id=${encodeURIComponent(clientId)}`
+  return `${wsProto}://${httpProtoStripped}${path}`
+}
+
 export function upsertAttendanceCell(
   nickname: string,
   checkinDateLocal: string,

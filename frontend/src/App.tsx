@@ -5,6 +5,7 @@ import { NavLink, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { isFullEdition } from './edition'
 import Home from './pages/Home'
 import Join from './pages/Join'
+import WebRTCMeeting from './pages/WebRTCMeeting'
 import AttendanceImport from './pages/AttendanceImport'
 import Statistics from './pages/Statistics'
 import Members from './pages/Members'
@@ -86,6 +87,7 @@ function App() {
           ) : null}
           <Route path="/settings" element={<Settings />} />
           <Route path="/join" element={<Join />} />
+          <Route path="/meeting" element={<WebRTCMeeting />} />
           <Route path="/attendance/import" element={<AttendanceImport />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
