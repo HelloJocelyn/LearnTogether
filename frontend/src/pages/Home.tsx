@@ -171,7 +171,8 @@ export default function Home() {
           clientId,
           room_id: join.room_id,
           is_host: join.is_host,
-          ice_servers: join.ice_servers,
+          livekit_url: join.livekit_url,
+          token: join.token,
           displayName: name,
         },
       })
@@ -240,7 +241,8 @@ export default function Home() {
             clientId,
             room_id: join.room_id,
             is_host: join.is_host,
-            ice_servers: join.ice_servers,
+            livekit_url: join.livekit_url,
+          token: join.token,
             displayName: name,
           },
         })

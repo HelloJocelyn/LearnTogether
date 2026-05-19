@@ -1,17 +1,17 @@
-"""In-browser WebRTC meeting: room + WebSocket signaling (mesh-ready; swap for SFU signaling later)."""
+"""In-browser meeting via LiveKit SFU: daily room + access tokens."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException
+from livekit.api import AccessToken, VideoGrants
 
 from . import schemas
 
@@ -29,7 +29,6 @@ def _room_key_for_today() -> str:
 @dataclass
 class _RoomState:
   host_client_id: Optional[str] = None
-  sockets: dict[str, WebSocket] = field(default_factory=dict)
   display_names: dict[str, str] = field(default_factory=dict)
 
 
@@ -37,16 +36,33 @@ _rooms: dict[str, _RoomState] = {}
 _lock = asyncio.Lock()
 
 
-def _default_ice_servers() -> list[dict[str, Any]]:
-  raw = os.getenv("WEBRTC_ICE_SERVERS_JSON", "").strip()
-  if raw:
-    try:
-      parsed = json.loads(raw)
-      if isinstance(parsed, list):
-        return parsed
-    except json.JSONDecodeError:
-      logger.warning("WEBRTC_ICE_SERVERS_JSON invalid JSON; using STUN fallback")
-  return [{"urls": "stun:stun.l.google.com:19302"}]
+def _livekit_settings() -> tuple[str, str, str]:
+  api_key = os.getenv("LIVEKIT_API_KEY", "").strip()
+  api_secret = os.getenv("LIVEKIT_API_SECRET", "").strip()
+  public_url = (
+    os.getenv("LIVEKIT_PUBLIC_URL", "").strip()
+    or os.getenv("LIVEKIT_URL", "").strip()
+  )
+  if not api_key or not api_secret or not public_url:
+    raise HTTPException(
+      status_code=503,
+      detail=(
+        "LiveKit is not configured. Set LIVEKIT_API_KEY, LIVEKIT_API_SECRET, "
+        "and LIVEKIT_PUBLIC_URL (browser-reachable WebSocket URL, e.g. ws://localhost:7880)."
+      ),
+    )
+  return api_key, api_secret, public_url
+
+
+def _issue_livekit_token(*, room_id: str, client_id: str, display_name: str) -> str:
+  api_key, api_secret, _ = _livekit_settings()
+  return (
+    AccessToken(api_key, api_secret)
+    .with_identity(client_id)
+    .with_name(display_name or client_id)
+    .with_grants(VideoGrants(room_join=True, room=room_id))
+    .to_jwt()
+  )
 
 
 @router.post("/join", response_model=schemas.MeetingJoinOut)
@@ -63,107 +79,15 @@ async def join_meeting(payload: schemas.MeetingJoinIn) -> schemas.MeetingJoinOut
       room.host_client_id = client_id
     if display_name:
       room.display_names[client_id] = display_name
+  _, _, livekit_url = _livekit_settings()
+  token = _issue_livekit_token(
+    room_id=room_id,
+    client_id=client_id,
+    display_name=display_name,
+  )
   return schemas.MeetingJoinOut(
     room_id=room_id,
     is_host=is_host,
-    ice_servers=_default_ice_servers(),
+    livekit_url=livekit_url,
+    token=token,
   )
-
-
-async def _broadcast(room_id: str, message: dict, exclude: Optional[str] = None) -> None:
-  room = _rooms.get(room_id)
-  if not room:
-    return
-  dead: list[str] = []
-  text = json.dumps(message)
-  for cid, ws in list(room.sockets.items()):
-    if exclude and cid == exclude:
-      continue
-    try:
-      await ws.send_text(text)
-    except Exception:
-      dead.append(cid)
-  for cid in dead:
-    room.sockets.pop(cid, None)
-
-
-@router.websocket("/ws/{room_id}")
-async def meeting_websocket(websocket: WebSocket, room_id: str) -> None:
-  client_id = (websocket.query_params.get("client_id") or "").strip()
-  if not client_id or len(client_id) > 120:
-    await websocket.close(code=4400)
-    return
-  await websocket.accept()
-  async with _lock:
-    room = _rooms.setdefault(room_id, _RoomState())
-    if room.host_client_id is None:
-      room.host_client_id = client_id
-    room.sockets[client_id] = websocket
-    host_id = room.host_client_id
-    roster = list(room.sockets.keys())
-    names = {k: room.display_names.get(k, k) for k in roster}
-  await websocket.send_text(
-    json.dumps(
-      {
-        "type": "welcome",
-        "client_id": client_id,
-        "is_host": client_id == host_id,
-        "roster": roster,
-        "display_names": names,
-      }
-    )
-  )
-  await _broadcast(
-    room_id,
-    {"type": "peer-joined", "client_id": client_id, "roster": roster, "display_names": names},
-    exclude=client_id,
-  )
-
-  try:
-    while True:
-      raw = await websocket.receive_text()
-      try:
-        msg = json.loads(raw)
-      except json.JSONDecodeError:
-        continue
-      if not isinstance(msg, dict):
-        continue
-      mtype = msg.get("type")
-      if mtype == "signal":
-        target = msg.get("to")
-        payload = msg.get("payload")
-        if target:
-          room = _rooms.get(room_id)
-          if not room:
-            continue
-          peer = room.sockets.get(str(target))
-          if peer:
-            try:
-              await peer.send_text(
-                json.dumps({"type": "signal", "from": client_id, "payload": payload})
-              )
-            except Exception:
-              pass
-        else:
-          await _broadcast(
-            room_id,
-            {"type": "signal", "from": client_id, "payload": payload},
-            exclude=client_id,
-          )
-  except WebSocketDisconnect:
-    pass
-  finally:
-    async with _lock:
-      room = _rooms.get(room_id)
-      if not room:
-        return
-      room.sockets.pop(client_id, None)
-      roster = list(room.sockets.keys())
-      if not roster:
-        _rooms.pop(room_id, None)
-      elif room.host_client_id == client_id and roster:
-        room.host_client_id = roster[0]
-    await _broadcast(
-      room_id,
-      {"type": "peer-left", "client_id": client_id, "roster": roster},
-    )

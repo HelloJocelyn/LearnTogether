@@ -55,7 +55,8 @@ class MeetingJoinIn(BaseModel):
 class MeetingJoinOut(BaseModel):
   room_id: str
   is_host: bool
-  ice_servers: list[Any]
+  livekit_url: str
+  token: str
 
 
 AttendanceStatus = Literal["attended", "not_attended", "unknown"]

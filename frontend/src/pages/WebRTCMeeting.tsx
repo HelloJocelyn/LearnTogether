@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 
-import { joinMeeting, meetingWebSocketUrl } from '../api'
-import { createMeshMeetingSession } from '../webrtc/meetingMesh'
+import { joinMeeting } from '../api'
+import { connectLivekitMeeting } from '../webrtc/livekitMeeting'
 import { useI18n } from '../i18n'
 
 type MeetingLocationState = {
   clientId?: string
   room_id?: string
   is_host?: boolean
-  ice_servers?: RTCIceServer[]
+  livekit_url?: string
+  token?: string
   displayName?: string
 }
 
@@ -32,63 +33,53 @@ export default function WebRTCMeeting() {
   const [isHost, setIsHost] = useState(false)
   const [status, setStatus] = useState<'idle' | 'connecting' | 'live' | 'ended'>('idle')
 
-  const remoteStreamsRef = useRef(new Map<string, HTMLVideoElement>())
+  const remoteElementsRef = useRef(new Map<string, HTMLMediaElement>())
 
   useEffect(() => {
-    let mesh: { close: () => void } | null = null
-    let stream: MediaStream | null = null
+    let session: { close: () => void } | null = null
     let cancelled = false
 
     async function run() {
       setError(null)
       setStatus('connecting')
       try {
-        let roomId = state?.room_id
-        let iceServers = state?.ice_servers
+        let livekitUrl = state?.livekit_url
+        let token = state?.token
         let host = state?.is_host ?? false
-        if (!roomId || !iceServers) {
+        if (!livekitUrl || !token) {
           const j = await joinMeeting(clientId, displayName || undefined)
           if (cancelled) return
-          roomId = j.room_id
-          iceServers = j.ice_servers
+          livekitUrl = j.livekit_url
+          token = j.token
           host = j.is_host
         }
         if (cancelled) return
         setIsHost(Boolean(host))
 
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        if (cancelled) {
-          for (const tr of stream.getTracks()) tr.stop()
-          return
-        }
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream
-          await localVideoRef.current.play().catch(() => {})
+        const localVideo = localVideoRef.current
+        if (!localVideo) {
+          throw new Error('Video element not ready')
         }
 
-        const wsUrl = meetingWebSocketUrl(roomId, clientId)
-        mesh = createMeshMeetingSession(wsUrl, clientId, iceServers, stream, {
-          onRemoteStream: (peerId, remoteStream) => {
+        session = await connectLivekitMeeting(livekitUrl, token, localVideo, {
+          onRemoteMedia: (peerId, element) => {
             if (cancelled) return
             const wrap = remoteWrapRef.current
             if (!wrap) return
-            let vid = remoteStreamsRef.current.get(peerId)
-            if (!vid) {
-              vid = document.createElement('video')
-              vid.autoplay = true
-              vid.playsInline = true
-              vid.className = 'meetingRemoteVideo'
-              vid.dataset.peer = peerId
-              wrap.appendChild(vid)
-              remoteStreamsRef.current.set(peerId, vid)
+            const existing = remoteElementsRef.current.get(peerId)
+            if (existing) {
+              existing.remove()
             }
-            vid.srcObject = remoteStream
+            element.className = 'meetingRemoteVideo'
+            wrap.appendChild(element)
+            remoteElementsRef.current.set(peerId, element)
+            void element.play().catch(() => {})
           },
           onRemoteGone: (peerId) => {
-            const vid = remoteStreamsRef.current.get(peerId)
-            if (vid) {
-              vid.remove()
-              remoteStreamsRef.current.delete(peerId)
+            const el = remoteElementsRef.current.get(peerId)
+            if (el) {
+              el.remove()
+              remoteElementsRef.current.delete(peerId)
             }
           },
           onLog: (msg) => {
@@ -96,8 +87,8 @@ export default function WebRTCMeeting() {
           },
         })
         if (cancelled) {
-          mesh.close()
-          mesh = null
+          session.close()
+          session = null
           return
         }
         setStatus('live')
@@ -112,17 +103,16 @@ export default function WebRTCMeeting() {
     void run()
     return () => {
       cancelled = true
-      mesh?.close()
-      for (const v of remoteStreamsRef.current.values()) {
+      session?.close()
+      for (const v of remoteElementsRef.current.values()) {
         v.remove()
       }
-      remoteStreamsRef.current.clear()
-      if (stream) {
-        for (const tr of stream.getTracks()) tr.stop()
+      remoteElementsRef.current.clear()
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null
       }
-      if (localVideoRef.current) localVideoRef.current.srcObject = null
     }
-  }, [clientId, displayName, state?.ice_servers, state?.is_host, state?.room_id])
+  }, [clientId, displayName, state?.is_host, state?.livekit_url, state?.token])
 
   return (
     <div className="page">
@@ -148,7 +138,7 @@ export default function WebRTCMeeting() {
           <div ref={remoteWrapRef} className="meetingRemoteGrid" />
         </div>
 
-        <p className="muted meetingHint">{t('meeting.meshHint')}</p>
+        <p className="muted meetingHint">{t('meeting.sfuHint')}</p>
 
         <button type="button" className="secondary" onClick={() => navigate('/')}>
           {t('meeting.leave')}

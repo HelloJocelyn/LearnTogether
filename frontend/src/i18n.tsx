@@ -72,8 +72,8 @@ const dictionaries: Record<Lang, Dict> = {
       'You opened this session’s room (first to join today). Others join the same WebRTC room.',
     'meeting.connecting': 'Connecting camera and signaling…',
     'meeting.you': 'You',
-    'meeting.meshHint':
-      'This build uses a browser mesh (peer-to-peer via signaling). For production SFU traffic, replace signaling with your SFU client.',
+    'meeting.sfuHint':
+      'Video is routed through a LiveKit media server (SFU). Each participant uploads once; the server forwards streams to others.',
     'meeting.leave': 'Leave meeting',
     'meeting.debugLog': 'Connection log',
     'home.zoomManualTitle': 'Join Zoom manually',
@@ -393,8 +393,8 @@ const dictionaries: Record<Lang, Dict> = {
     'meeting.hostBanner': '你为本日会话打开了房间（今日首位加入者）。其他人会加入同一 WebRTC 房间。',
     'meeting.connecting': '正在连接摄像头与信令…',
     'meeting.you': '你',
-    'meeting.meshHint':
-      '当前为浏览器网格（通过信令建立点对点连接）。生产环境若使用 SFU，请将信令替换为你的 SFU 客户端。',
+    'meeting.sfuHint':
+      '视频经 LiveKit 媒体服务器（SFU）转发：每人只上传一路，由服务器分发给其他人。',
     'meeting.leave': '离开会议',
     'meeting.debugLog': '连接日志',
     'home.zoomManualTitle': '手动加入 Zoom',
@@ -720,8 +720,8 @@ const dictionaries: Record<Lang, Dict> = {
       'あなたが今日最初の参加者としてこの部屋を開きました。他の人は同じ WebRTC ルームに参加します。',
     'meeting.connecting': 'カメラとシグナリングに接続中…',
     'meeting.you': '自分',
-    'meeting.meshHint':
-      'このビルドはブラウザのメッシュ（シグナリング経由のピアツーピア）です。本番の SFU ではシグナリングを SFU クライアントに差し替えてください。',
+    'meeting.sfuHint':
+      '映像は LiveKit メディアサーバー（SFU）経由です。各参加者は1本だけアップロードし、サーバーが他の人へ配信します。',
     'meeting.leave': 'ミーティングを退出',
     'meeting.debugLog': '接続ログ',
     'home.zoomManualTitle': '手動で Zoom に参加',
